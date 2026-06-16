@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import DashboardLayout from "@/layouts/DashboardLayout";
 import {
-  mockSuppliers, formatRpShort,
+  formatRpShort, toSupplierView,
   type Supplier, type SupplierStatus,
 } from "@/data/suppliers";
+import { auditLogService, productService, supplierService } from "@/services";
+import { useSession } from "@/contexts/SessionContext";
 import {
   Search, Plus, X, Mail, Phone, MapPin,
   ChevronRight, Package, History, Pencil,
@@ -30,12 +32,31 @@ const emptyAdd: AddForm = {
 };
 
 export default function SuppliersPage() {
+  const { currentUser } = useSession();
+  const currentUserId = currentUser?.userId ?? "user-owner-001";
   const [search, setSearch]         = useState("");
   const [statusFilter, setStatus]   = useState<StatusFilter>("Semua");
   const [detail, setDetail]         = useState<Supplier | null>(null);
   const [showAdd, setShowAdd]       = useState(false);
   const [addForm, setAddForm]       = useState<AddForm>(emptyAdd);
-  const [suppliers, setSuppliers]   = useState<Supplier[]>(mockSuppliers);
+  const [suppliers, setSuppliers]   = useState<Supplier[]>([]);
+
+  useEffect(() => {
+    let mounted = true;
+    Promise.all([
+      supplierService.list({ userId: currentUserId }),
+      productService.list({ userId: currentUserId }),
+    ]).then(([supplierResponse, productResponse]) => {
+      if (!mounted) return;
+      const products = productResponse.success && productResponse.data ? productResponse.data : [];
+      if (supplierResponse.success && supplierResponse.data) {
+        setSuppliers(supplierResponse.data.map((supplier, index) => toSupplierView(supplier, index, products)));
+      }
+    });
+    return () => {
+      mounted = false;
+    };
+  }, [currentUserId]);
 
   const LOGO_COLORS = ["#FF6B00","#374151","#1D4ED8","#059669","#7C3AED","#DC2626","#D97706","#1E3A8A"];
 
@@ -63,7 +84,22 @@ export default function SuppliersPage() {
       status:         "Lunas",
       recentTx:       [],
     };
-    setSuppliers(prev => [newSupplier, ...prev]);
+    supplierService.create({
+      userId: currentUserId,
+      nama: newSupplier.name,
+      kontak: newSupplier.phone || newSupplier.email,
+    }).then((response) => {
+      if (response.success && response.data) {
+        setSuppliers(prev => [toSupplierView(response.data, prev.length, []), ...prev]);
+      } else {
+        setSuppliers(prev => [newSupplier, ...prev]);
+      }
+    });
+    void auditLogService.create({
+      userId: currentUserId,
+      aksi: `Membuat supplier ${newSupplier.name}`,
+      module: "suppliers",
+    });
     setAddForm(emptyAdd);
     setShowAdd(false);
   }
@@ -145,7 +181,7 @@ export default function SuppliersPage() {
                 </div>
                 <div>
                   <label className="mb-1.5 block text-sm font-semibold text-gray-700">Kategori Produk</label>
-                  <input type="text" placeholder="Contoh: Footwear, Apparel" value={addForm.category}
+                  <input type="text" placeholder="Contoh: Bahan baku, kemasan" value={addForm.category}
                     onChange={e => setAddForm(f => ({ ...f, category: e.target.value }))}
                     className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-300 outline-none focus:border-orange-300" />
                 </div>

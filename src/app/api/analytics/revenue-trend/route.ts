@@ -1,0 +1,16 @@
+import { NextRequest } from "next/server";
+import { handleApiError, ok } from "@/lib/api-response";
+import { requireAuth } from "@/lib/auth";
+import { analyticsSummary } from "@/server/services/posmart";
+
+export const runtime = "nodejs";
+
+export async function GET(request: NextRequest) {
+  try {
+    const user = await requireAuth(request);
+    const summary = await analyticsSummary(user, request.nextUrl.searchParams);
+    return ok("Tren pendapatan berhasil diambil", summary.trenPendapatan);
+  } catch (error) {
+    return handleApiError(error);
+  }
+}

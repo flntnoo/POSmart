@@ -1,4 +1,5 @@
 import { recentTransactionsData } from "@/data/dashboard";
+import { EmptyState } from "@/components/ui/AppState";
 
 const methodColors: Record<string, string> = {
   QRIS: "bg-green-50 text-green-600",
@@ -25,8 +26,11 @@ export default function RecentTransactions() {
         </button>
       </div>
 
-      <div className="flex flex-col gap-4">
-        {recentTransactionsData.map((trx) => (
+      {recentTransactionsData.length === 0 ? (
+        <EmptyState title="Belum ada transaksi" description="Transaksi terbaru akan muncul setelah kasir memproses penjualan." />
+      ) : (
+        <div className="flex flex-col gap-4">
+          {recentTransactionsData.map((trx) => (
           <div key={trx.id} className="flex items-center gap-3">
             {/* Avatar */}
             <div
@@ -57,9 +61,10 @@ export default function RecentTransactions() {
                 {trx.method}
               </span>
             </div>
-          </div>
-        ))}
-      </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

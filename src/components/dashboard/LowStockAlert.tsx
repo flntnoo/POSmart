@@ -1,5 +1,6 @@
 import { AlertTriangle } from "lucide-react";
 import { lowStockData } from "@/data/dashboard";
+import { EmptyState } from "@/components/ui/AppState";
 
 function stockColor(stock: number, max: number) {
   const pct = (stock / max) * 100;
@@ -23,8 +24,11 @@ export default function LowStockAlert() {
         </span>
       </div>
 
-      <div className="space-y-4">
-        {lowStockData.map((item) => {
+      {lowStockData.length === 0 ? (
+        <EmptyState title="Stok aman" description="Belum ada produk yang berada di bawah batas minimum." />
+      ) : (
+        <div className="space-y-4">
+          {lowStockData.map((item) => {
           const pct = Math.round((item.stock / item.maxStock) * 100);
           const colors = stockColor(item.stock, item.maxStock);
 
@@ -53,8 +57,9 @@ export default function LowStockAlert() {
               </div>
             </div>
           );
-        })}
-      </div>
+          })}
+        </div>
+      )}
     </div>
   );
 }

@@ -1,34 +1,38 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import DashboardLayout from "@/layouts/DashboardLayout";
-import { mockProducts, getStatus, type ProductCategory } from "@/data/products";
+import { getStatus, toProductView, type ProductCategory, type Product as ProductView } from "@/data/products";
+import { auditLogService, categoryService, inventoryService, outletService, productService } from "@/services";
+import { useSession } from "@/contexts/SessionContext";
+import type { Category, Inventory, Outlet, Product } from "@/types/posmart";
 import { Search, Plus, Pencil, Trash2, Package, ChevronDown, X } from "lucide-react";
 
-type CategoryFilter = "Semua" | "Apparel" | "Footwear" | "Accessories";
+type CategoryFilter = "Semua" | "Minuman" | "Makanan" | "Snack" | "Retail";
 type StatusFilter = "Semua" | "Aktif" | "Menipis" | "Habis";
 
 const categoryTabs: { key: CategoryFilter; label: string }[] = [
-  { key: "Semua",       label: "Semua" },
-  { key: "Apparel",     label: "Fashion" },
-  { key: "Footwear",    label: "Footwear" },
-  { key: "Accessories", label: "Accessories" },
+  { key: "Semua", label: "Semua" },
+  { key: "Minuman", label: "Minuman" },
+  { key: "Makanan", label: "Makanan" },
+  { key: "Snack", label: "Snack" },
+  { key: "Retail", label: "Retail" },
 ];
 
 const statusTabs: StatusFilter[] = ["Semua", "Aktif", "Menipis", "Habis"];
 
 const categoryColors: Record<ProductCategory, string> = {
-  Apparel:    "bg-orange-50 text-orange-500",
-  Footwear:   "bg-blue-50 text-blue-500",
-  Headwear:   "bg-green-50 text-green-600",
-  "Fan Gear": "bg-purple-50 text-purple-500",
+  Minuman: "bg-orange-50 text-orange-500",
+  Makanan: "bg-blue-50 text-blue-500",
+  Snack: "bg-green-50 text-green-600",
+  Retail: "bg-purple-50 text-purple-500",
 };
 
 const categoryGradients: Record<ProductCategory, [string, string]> = {
-  Apparel:    ["#FFF3E0", "#FFD9A0"],
-  Footwear:   ["#E3F2FD", "#BBDEFB"],
-  Headwear:   ["#E8F5E9", "#C8E6C9"],
-  "Fan Gear": ["#F3E5F5", "#E1BEE7"],
+  Minuman: ["#FFF3E0", "#FFD9A0"],
+  Makanan: ["#E3F2FD", "#BBDEFB"],
+  Snack: ["#E8F5E9", "#C8E6C9"],
+  Retail: ["#F3E5F5", "#E1BEE7"],
 };
 
 const statusColors: Record<string, string> = {
@@ -47,7 +51,7 @@ type FormData = {
 };
 
 const emptyForm: FormData = {
-  name: "", sku: "", category: "Apparel", price: "", stock: "", description: "",
+  name: "", sku: "", category: "Minuman", price: "", stock: "", description: "",
 };
 
 function formatPrice(p: number) {
@@ -55,13 +59,42 @@ function formatPrice(p: number) {
 }
 
 export default function ProductsPage() {
+  const { currentUser } = useSession();
+  const currentUserId = currentUser?.userId ?? "user-owner-001";
   const [search, setSearch]                 = useState("");
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("Semua");
   const [statusFilter, setStatusFilter]     = useState<StatusFilter>("Semua");
   const [showForm, setShowForm]             = useState(false);
   const [editingId, setEditingId]           = useState<string | null>(null);
   const [form, setForm]                     = useState<FormData>(emptyForm);
-  const [products, setProducts]             = useState(mockProducts);
+  const [products, setProducts]             = useState<ProductView[]>([]);
+  const [domainProducts, setDomainProducts] = useState<Product[]>([]);
+  const [inventory, setInventory]           = useState<Inventory[]>([]);
+  const [categories, setCategories]         = useState<Category[]>([]);
+  const [outlets, setOutlets]               = useState<Outlet[]>([]);
+
+  useEffect(() => {
+    let mounted = true;
+    Promise.all([
+      productService.list({ userId: currentUserId }),
+      inventoryService.list({ userId: currentUserId }),
+      categoryService.list({ userId: currentUserId }),
+      outletService.list({ userId: currentUserId }),
+    ]).then(([productResponse, inventoryResponse, categoryResponse, outletResponse]) => {
+      if (!mounted) return;
+      const nextProducts = productResponse.success && productResponse.data ? productResponse.data : [];
+      const nextInventory = inventoryResponse.success && inventoryResponse.data ? inventoryResponse.data : [];
+      const nextCategories = categoryResponse.success && categoryResponse.data ? categoryResponse.data : [];
+      setDomainProducts(nextProducts);
+      setInventory(nextInventory);
+      setCategories(nextCategories);
+      if (outletResponse.success && outletResponse.data) setOutlets(outletResponse.data);
+      setProducts(nextProducts.map((product) => toProductView(product, nextInventory, nextCategories)));
+    });
+    return () => {
+      mounted = false;
+    };
+  }, [currentUserId]);
 
   const stats = useMemo(() => {
     const aktif      = products.filter(p => getStatus(p.stock, p.minStock) === "Aktif").length;
@@ -74,9 +107,7 @@ export default function ProductsPage() {
 
   const filtered = useMemo(() => {
     return products.filter(p => {
-      if (categoryFilter === "Apparel"     && p.category !== "Apparel")  return false;
-      if (categoryFilter === "Footwear"    && p.category !== "Footwear") return false;
-      if (categoryFilter === "Accessories" && p.category !== "Headwear" && p.category !== "Fan Gear") return false;
+      if (categoryFilter !== "Semua" && p.category !== categoryFilter) return false;
       if (statusFilter !== "Semua" && getStatus(p.stock, p.minStock) !== statusFilter) return false;
       if (search && !p.name.toLowerCase().includes(search.toLowerCase()) && !p.sku.toLowerCase().includes(search.toLowerCase())) return false;
       return true;
@@ -103,32 +134,92 @@ export default function ProductsPage() {
   }
 
   function handleDelete(id: string) {
-    setProducts(prev => prev.filter(p => p.id !== id));
+    const product = products.find(p => p.id === id);
+    void productService.remove(id).then((response) => {
+      if (response.success) setProducts(prev => prev.filter(p => p.id !== id));
+    });
+    void auditLogService.create({
+      userId: currentUserId,
+      aksi: `Menghapus produk ${product?.name ?? id}`,
+      module: "products",
+    });
   }
 
   function handleSubmit(e: { preventDefault(): void }) {
     e.preventDefault();
     if (editingId) {
-      setProducts(prev => prev.map(p => p.id === editingId ? {
-        ...p,
-        name:     form.name     || p.name,
-        sku:      form.sku      || p.sku,
-        category: form.category,
-        price:    parseInt(form.price) || p.price,
-        stock:    parseInt(form.stock) >= 0 ? parseInt(form.stock) : p.stock,
-      } : p));
+      const existingProduct = products.find(p => p.id === editingId);
+      const categoryId = categories.find((category) => category.nama === form.category)?.categoryId ?? domainProducts.find((product) => product.productId === editingId)?.categoryId;
+      const price = parseInt(form.price) || existingProduct?.price || 0;
+      const stock = parseInt(form.stock);
+      void productService.update(editingId, {
+        nama: form.name || existingProduct?.name,
+        sku: form.sku || existingProduct?.sku,
+        harga: price,
+        categoryId,
+      }).then((response) => {
+        if (!response.success || !response.data) return;
+        const existingInventory = inventory.find((item) => item.productId === editingId);
+        const inventoryUpdate = existingInventory && stock >= 0
+          ? inventoryService.adjust({ productId: editingId, outletId: existingInventory.outletId, quantity: stock, type: "set" })
+          : Promise.resolve(null);
+
+        inventoryUpdate.then((inventoryResponse) => {
+          const nextInventory = inventoryResponse?.success && inventoryResponse.data
+            ? inventory.map((item) => item.inventoryId === inventoryResponse.data!.inventoryId ? inventoryResponse.data! : item)
+            : inventory;
+          setInventory(nextInventory);
+          setDomainProducts((current) => current.map((item) => item.productId === editingId ? response.data! : item));
+          setProducts((current) => current.map((item) => item.id === editingId ? toProductView(response.data!, nextInventory, categories) : item));
+        });
+      });
+      void auditLogService.create({
+        userId: currentUserId,
+        aksi: `Memperbarui produk ${form.name || existingProduct?.name || editingId}`,
+        module: "products",
+      });
     } else {
+      const selectedCategory = categories.find((category) => category.nama === form.category);
+      const selectedOutlet = outlets[0];
+      const stock = parseInt(form.stock) || 0;
+      const price = parseInt(form.price) || 0;
       const newProduct = {
         id:       `p-${Date.now()}`,
         name:     form.name,
         sku:      form.sku || `SKU-${products.length + 1}`,
         category: form.category,
-        stock:    parseInt(form.stock)  || 0,
+        stock,
         minStock: 5,
-        price:    parseInt(form.price)  || 0,
+        price,
         sold:     0,
       };
-      setProducts(prev => [newProduct, ...prev]);
+      void productService.create({
+        nama: newProduct.name,
+        sku: newProduct.sku,
+        harga: newProduct.price,
+        categoryId: selectedCategory?.categoryId,
+        outletId: selectedOutlet?.outletId,
+      }).then((response) => {
+        if (!response.success || !response.data) {
+          setProducts(prev => [newProduct, ...prev]);
+          return;
+        }
+        const inventoryCreate = selectedOutlet
+          ? inventoryService.create({ productId: response.data!.productId, outletId: selectedOutlet.outletId, stok: stock })
+          : Promise.resolve(null);
+        inventoryCreate.then((inventoryResponse) => {
+          const nextInventory = inventoryResponse?.success && inventoryResponse.data ? [inventoryResponse.data, ...inventory] : inventory;
+          const nextDomainProducts = [response.data!, ...domainProducts];
+          setInventory(nextInventory);
+          setDomainProducts(nextDomainProducts);
+          setProducts(nextDomainProducts.map((product) => toProductView(product, nextInventory, categories)));
+        });
+      });
+      void auditLogService.create({
+        userId: currentUserId,
+        aksi: `Membuat produk ${newProduct.name}`,
+        module: "products",
+      });
     }
     setShowForm(false);
     setEditingId(null);
@@ -144,12 +235,12 @@ export default function ProductsPage() {
   return (
     <DashboardLayout>
       {/* Page header */}
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Produk &amp; Inventori</h1>
           <p className="mt-0.5 text-sm text-gray-500">Kelola produk, stok, dan harga</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <div className="relative">
             <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
@@ -157,7 +248,7 @@ export default function ProductsPage() {
               placeholder="Cari produk atau SKU..."
               value={search}
               onChange={e => setSearch(e.target.value)}
-              className="w-64 rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-4 text-sm text-gray-700 placeholder:text-gray-400 shadow-sm outline-none focus:border-orange-300"
+            className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-4 text-sm text-gray-700 placeholder:text-gray-400 shadow-sm outline-none focus:border-orange-300 sm:w-64"
             />
           </div>
           <button
@@ -171,7 +262,7 @@ export default function ProductsPage() {
       </div>
 
       {/* Stats row */}
-      <div className="mb-5 grid grid-cols-4 gap-4">
+      <div className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {/* Card 1 — blue gradient */}
         <div
           className="relative overflow-hidden rounded-[20px] p-5"
@@ -243,8 +334,8 @@ export default function ProductsPage() {
       </div>
 
       {/* Filter row */}
-      <div className="mb-4 flex items-center gap-3">
-        <div className="flex items-center gap-1 rounded-xl bg-gray-100/80 p-1">
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <div className="flex max-w-full items-center gap-1 overflow-x-auto rounded-xl bg-gray-100/80 p-1">
           {categoryTabs.map(tab => (
             <button
               key={tab.key}
@@ -260,9 +351,9 @@ export default function ProductsPage() {
           ))}
         </div>
 
-        <div className="flex-1" />
+        <div className="hidden flex-1 xl:block" />
 
-        <div className="flex items-center gap-1 rounded-xl bg-gray-100/80 p-1">
+        <div className="flex max-w-full items-center gap-1 overflow-x-auto rounded-xl bg-gray-100/80 p-1">
           {statusTabs.map(s => (
             <button
               key={s}
@@ -452,10 +543,10 @@ export default function ProductsPage() {
                       onChange={e => setForm(f => ({ ...f, category: e.target.value as ProductCategory }))}
                       className="w-full appearance-none rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-700 outline-none focus:border-orange-300"
                     >
-                      <option value="Apparel">Apparel</option>
-                      <option value="Footwear">Footwear</option>
-                      <option value="Headwear">Headwear</option>
-                      <option value="Fan Gear">Fan Gear</option>
+                      <option value="Minuman">Minuman</option>
+                      <option value="Makanan">Makanan</option>
+                      <option value="Snack">Snack</option>
+                      <option value="Retail">Retail</option>
                     </select>
                     <ChevronDown size={13} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
                   </div>

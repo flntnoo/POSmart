@@ -1,199 +1,240 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import DashboardLayout from "@/layouts/DashboardLayout";
-import { Check, CreditCard, Zap, Phone, Star, X } from "lucide-react";
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui/AppState";
+import { auditLogService, notificationService, paymentService, subscriptionService } from "@/services";
+import { useSession } from "@/contexts/SessionContext";
+import type { Subscription, SubscriptionPackage } from "@/types/posmart";
+import { Check, CreditCard, Info, Star, Zap } from "lucide-react";
 
-const FEATURES = [
-  "5 Kasir",
-  "Unlimited Produk",
-  "Advanced Analytics",
-  "Priority Support",
-  "Integrasi Payment",
-  "WhatsApp Notifications",
-];
+type Plan = {
+  paket: SubscriptionPackage;
+  price: number;
+  desc: string;
+  features: string[];
+  recommended?: boolean;
+};
 
-const PLANS = [
-  {
-    id: "starter",
-    name: "Starter",
-    priceLabel: "Gratis",
-    unit: "/bulan",
-    desc: "Untuk bisnis kecil yang baru mulai",
-    features: ["1 Kasir", "50 Produk", "Email Support"],
-    cta: "Get Started",
-    popular: false,
+const planDetails: Record<SubscriptionPackage, Omit<Plan, "paket" | "price">> = {
+  Free: {
+    desc: "Untuk mencoba alur POSmart dasar.",
+    features: ["1 owner", "Data awal terbatas", "Cocok untuk eksplorasi"],
   },
-  {
-    id: "business",
-    name: "Business",
-    priceLabel: "Rp 299K",
-    unit: "/bulan",
-    desc: "Untuk bisnis yang sedang berkembang",
-    features: ["5 Kasir", "Unlimited Produk", "Advanced Analytics", "Priority Support", "Integrasi Payment", "WhatsApp Notifications"],
-    cta: "Get Started",
-    popular: true,
+  Basic: {
+    desc: "Untuk UMKM yang mulai aktif bertransaksi.",
+    features: ["Multi produk", "Inventory dasar", "Dashboard penjualan", "Payment record"],
+    recommended: true,
   },
-  {
-    id: "enterprise",
-    name: "Enterprise",
-    priceLabel: "Rp 599K",
-    unit: "/bulan",
-    desc: "Untuk jaringan toko skala besar",
-    features: ["Semua fitur Business", "Unlimited Kasir", "Multi-Outlet Support", "24/7 Support", "API Access", "Custom Role"],
-    cta: "Contact Sales",
-    popular: false,
+  Pro: {
+    desc: "Untuk usaha yang butuh kapasitas operasional lebih besar.",
+    features: ["Semua fitur Basic", "Multi outlet", "Analytics lebih lengkap", "Prioritas support"],
   },
-];
+};
+
+function formatRp(value: number) {
+  if (value === 0) return "Gratis";
+  return "Rp " + value.toLocaleString("id-ID");
+}
+
+function statusLabel(status: Subscription["status"]) {
+  const labels: Record<Subscription["status"], string> = {
+    active: "Active",
+    pending: "Pending",
+    expired: "Expired",
+    cancelled: "Cancelled",
+  };
+  return labels[status];
+}
 
 export default function SubscriptionPage() {
-  const [showUpgrade, setShowUpgrade] = useState(false);
+  const router = useRouter();
+  const { currentUser } = useSession();
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [currentSubscription, setCurrentSubscription] = useState<Subscription | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [selecting, setSelecting] = useState<SubscriptionPackage | null>(null);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function load() {
+      setLoading(true);
+      const plansResponse = await subscriptionService.plans();
+      if (!mounted) return;
+
+      if (plansResponse.success && plansResponse.data) {
+        setPlans(plansResponse.data.map((plan) => ({ ...plan, ...planDetails[plan.paket] })));
+      } else {
+        setError(plansResponse.message);
+      }
+
+      if (currentUser) {
+        const subscriptionResponse = await subscriptionService.current(currentUser.userId);
+        if (subscriptionResponse.success && subscriptionResponse.data) setCurrentSubscription(subscriptionResponse.data);
+      }
+
+      setLoading(false);
+    }
+
+    load();
+    return () => {
+      mounted = false;
+    };
+  }, [currentUser]);
+
+  async function handleSelectPackage(paket: SubscriptionPackage, price: number) {
+    if (!currentUser) {
+      setError("Session tidak ditemukan. Silakan login atau registrasi ulang.");
+      return;
+    }
+
+    setSelecting(paket);
+    setError("");
+    setSuccess("");
+
+    const subscriptionResponse = await subscriptionService.selectPackage(currentUser.userId, paket);
+    if (!subscriptionResponse.success || !subscriptionResponse.data) {
+      setError(subscriptionResponse.message);
+      setSelecting(null);
+      return;
+    }
+
+    const paymentResponse = await paymentService.create({
+      subscriptionId: subscriptionResponse.data.subscriptionId,
+      jumlah: price,
+      metode: paket === "Free" ? "Free Package" : "Midtrans Mock",
+      status: paket === "Free" ? "success" : "pending",
+    });
+
+    if (!paymentResponse.success) {
+      setError(paymentResponse.message);
+      setSelecting(null);
+      return;
+    }
+
+    if (paket === "Free") {
+      await subscriptionService.activate(subscriptionResponse.data.subscriptionId);
+    }
+
+    await auditLogService.create({
+      userId: currentUser.userId,
+      aksi: `Memilih paket ${paket}`,
+      module: "subscriptions",
+    });
+
+    await notificationService.create({
+      userId: currentUser.userId,
+      tipe: paket === "Free" ? "activation" : "system",
+      pesan: paket === "Free"
+        ? "Paket Free aktif. Anda dapat melanjutkan onboarding POSmart."
+        : `Payment paket ${paket} masih pending dalam mode mock.`,
+      status: paket === "Free" ? "sent" : "pending",
+    });
+
+    setCurrentSubscription(subscriptionResponse.data);
+    setSuccess("Paket dipilih dan payment record mock dibuat. Mengarahkan ke status pembayaran...");
+    setTimeout(() => router.push("/payments"), 700);
+  }
 
   return (
     <DashboardLayout>
-      {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-xl font-bold text-gray-900">Subscription &amp; Billing</h1>
-        <p className="mt-0.5 text-sm text-gray-500">Manage your subscription plan and billing details</p>
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-bold text-gray-900">Subscription</h1>
+          <p className="mt-0.5 text-sm text-gray-500">Pilih paket POSmart untuk mengaktifkan akun dan melanjutkan onboarding</p>
+        </div>
+        {currentSubscription && (
+          <div className="rounded-2xl bg-white px-4 py-3 text-sm shadow-sm">
+            <p className="text-xs font-bold uppercase tracking-wider text-gray-400">Paket saat ini</p>
+            <p className="mt-1 font-bold text-gray-900">
+              {currentSubscription.paket} - {statusLabel(currentSubscription.status)}
+            </p>
+            {currentSubscription.endDate && <p className="mt-0.5 text-xs text-gray-400">Aktif sampai {currentSubscription.endDate}</p>}
+          </div>
+        )}
       </div>
 
-      {/* Current Plan card */}
-      <div className="rounded-[20px] bg-white p-7 shadow-sm">
-        {/* Top row: plan name + price */}
-        <div className="flex items-start justify-between mb-6">
-          <div>
-            <h2 className="text-lg font-bold text-gray-900">Current Plan: Business</h2>
-            <p className="mt-1 text-sm text-gray-400">Your subscription renews on July 1, 2026</p>
-          </div>
-          <div className="text-right">
-            <p className="text-3xl font-extrabold text-[#FF6B00]">Rp 299K</p>
-            <p className="text-xs text-gray-400 mt-0.5">per bulan</p>
-          </div>
-        </div>
-
-        {/* Features + payment side by side */}
-        <div className="flex gap-8">
-          {/* Included Features */}
-          <div className="flex-1">
-            <p className="mb-4 text-sm font-semibold text-gray-700">Included Features</p>
-            <div className="space-y-2.5">
-              {FEATURES.map(f => (
-                <div key={f} className="flex items-center gap-2.5">
-                  <Check size={15} strokeWidth={2.5} className="flex-shrink-0 text-green-500" />
-                  <span className="text-sm text-gray-700">{f}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Payment Method */}
-          <div className="w-[340px] flex-shrink-0">
-            <p className="mb-4 text-sm font-semibold text-gray-700">Payment Method</p>
-            <div className="rounded-2xl bg-gray-50 p-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-9 w-12 items-center justify-center rounded-xl bg-blue-500">
-                  <CreditCard size={16} className="text-white" />
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-gray-900 tracking-widest">•••••••••• 4242</p>
-                  <p className="text-xs text-gray-400 mt-0.5">Expires 12/27</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* CTA Buttons */}
-        <div className="mt-7 flex items-center gap-3">
-          <button
-            onClick={() => setShowUpgrade(true)}
-            className="flex items-center gap-2 rounded-full bg-[#FF6B00] px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-[#E05E00]"
-          >
-            Upgrade Plan
-          </button>
-          <button className="rounded-full border border-gray-300 px-5 py-2.5 text-sm font-semibold text-gray-600 transition-colors hover:bg-gray-50">
-            Update Payment Method
-          </button>
-        </div>
-      </div>
-
-      {/* Upgrade Plan modal */}
-      {showUpgrade && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
-          <div className="absolute inset-0 bg-black/30 backdrop-blur-[2px]" onClick={() => setShowUpgrade(false)} />
-          <div className="relative w-full max-w-[800px] rounded-[24px] bg-white p-8 shadow-2xl">
-            {/* Modal header */}
-            <div className="mb-2 flex items-start justify-between">
-              <div>
-                <h3 className="text-xl font-extrabold text-gray-900">Pilih Paket yang Tepat</h3>
-                <p className="mt-1 text-sm text-gray-400">Mulai dari gratis, scale sesuai kebutuhan bisnis Anda</p>
-              </div>
-              <button onClick={() => setShowUpgrade(false)}
-                className="flex h-8 w-8 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100">
-                <X size={16} />
-              </button>
-            </div>
-
-            <div className="mt-6 grid grid-cols-3 gap-5">
-              {PLANS.map(plan => {
-                const isCurrent = plan.id === "business";
-                return (
-                  <div key={plan.id}
-                    className={`relative flex flex-col rounded-[20px] border-2 p-6 ${
-                      plan.popular ? "border-[#FF6B00] shadow-md shadow-orange-100" : "border-gray-200"
-                    }`}>
-                    {plan.popular && (
-                      <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
-                        <span className="rounded-full bg-[#FF6B00] px-4 py-1 text-[11px] font-bold text-white shadow-sm whitespace-nowrap">
-                          Most Populer
-                        </span>
-                      </div>
-                    )}
-
-                    <p className="text-xs font-bold uppercase tracking-wider text-gray-400">{plan.name}</p>
-                    <div className="mt-1 flex items-baseline gap-1">
-                      <span className="text-3xl font-extrabold text-gray-900">{plan.priceLabel}</span>
-                      <span className="text-sm text-gray-400">{plan.unit}</span>
-                    </div>
-                    <p className="mt-1 mb-5 text-xs text-gray-400">{plan.desc}</p>
-
-                    <div className="flex-1 space-y-2.5 mb-6">
-                      {plan.features.map(f => (
-                        <div key={f} className="flex items-start gap-2">
-                          <Check size={13} strokeWidth={3}
-                            className={`mt-0.5 flex-shrink-0 ${plan.popular ? "text-[#FF6B00]" : "text-green-500"}`} />
-                          <span className="text-sm text-gray-600">{f}</span>
-                        </div>
-                      ))}
-                    </div>
-
-                    <button
-                      onClick={() => setShowUpgrade(false)}
-                      className={`w-full rounded-xl py-3 text-sm font-bold transition-colors ${
-                        isCurrent
-                          ? "bg-orange-100 text-orange-500 cursor-default"
-                          : plan.popular
-                            ? "bg-[#FF6B00] text-white hover:bg-[#E05E00]"
-                            : plan.cta === "Contact Sales"
-                              ? "border-2 border-gray-300 text-gray-700 hover:bg-gray-50"
-                              : "border-2 border-gray-300 text-gray-700 hover:bg-gray-50"
-                      }`}
-                    >
-                      {isCurrent ? (
-                        <span className="flex items-center justify-center gap-1.5"><Star size={13} /> Paket Aktif</span>
-                      ) : plan.cta === "Contact Sales" ? (
-                        <span className="flex items-center justify-center gap-1.5"><Phone size={13} /> Contact Sales</span>
-                      ) : (
-                        <span className="flex items-center justify-center gap-1.5"><Zap size={13} /> Get Started</span>
-                      )}
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+      {success && (
+        <div className="mb-4 rounded-xl border border-green-100 bg-green-50 px-4 py-3 text-sm font-semibold text-green-700">
+          {success}
         </div>
       )}
+
+      {error && (
+        <div className="mb-4 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-semibold text-red-600">
+          {error}
+        </div>
+      )}
+
+      <div className="mb-5 flex flex-wrap items-start gap-3 rounded-[20px] border border-blue-100 bg-blue-50 p-4 text-sm text-blue-700">
+        <Info size={17} className="mt-0.5 flex-shrink-0" />
+        <p>Midtrans belum diintegrasikan. Basic dan Pro membuat payment record berstatus pending dalam mode mock, lalu dapat disimulasikan sukses di halaman Payments.</p>
+      </div>
+
+      {loading ? (
+        <LoadingState title="Memuat paket..." />
+      ) : plans.length === 0 ? (
+        <EmptyState title="Belum ada paket" description="Data paket subscription belum tersedia di mock service." />
+      ) : (
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+          {plans.map((plan) => {
+            const isCurrent = currentSubscription?.paket === plan.paket;
+            return (
+              <div
+                key={plan.paket}
+                className={`relative flex flex-col rounded-[20px] border-2 bg-white p-6 shadow-sm ${
+                  plan.recommended ? "border-[#FF6B00] shadow-orange-100" : "border-gray-100"
+                }`}
+              >
+                {plan.recommended && (
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                    <span className="rounded-full bg-[#FF6B00] px-4 py-1 text-[11px] font-bold text-white shadow-sm">
+                      Rekomendasi UMKM
+                    </span>
+                  </div>
+                )}
+
+                <p className="text-xs font-bold uppercase tracking-wider text-gray-400">{plan.paket}</p>
+                <div className="mt-1 flex items-baseline gap-1">
+                  <span className="text-3xl font-extrabold text-gray-900">{formatRp(plan.price)}</span>
+                  {plan.price > 0 && <span className="text-sm text-gray-400">/bulan</span>}
+                </div>
+                <p className="mt-2 text-sm text-gray-500">{plan.desc}</p>
+
+                <div className="my-6 flex-1 space-y-2.5">
+                  {plan.features.map((feature) => (
+                    <div key={feature} className="flex items-start gap-2">
+                      <Check size={14} strokeWidth={3} className="mt-0.5 flex-shrink-0 text-green-500" />
+                      <span className="text-sm text-gray-600">{feature}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <button
+                  onClick={() => handleSelectPackage(plan.paket, plan.price)}
+                  disabled={selecting !== null}
+                  className={`flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold transition-colors ${
+                    isCurrent
+                      ? "bg-orange-100 text-orange-500"
+                      : plan.recommended
+                        ? "bg-[#FF6B00] text-white hover:bg-[#E05E00]"
+                        : "border-2 border-gray-200 text-gray-700 hover:bg-gray-50"
+                  } disabled:cursor-not-allowed disabled:opacity-50`}
+                >
+                  {isCurrent ? <Star size={14} /> : plan.price === 0 ? <Zap size={14} /> : <CreditCard size={14} />}
+                  {selecting === plan.paket ? "Menyimpan..." : isCurrent ? "Pilih Ulang Paket" : "Pilih Paket"}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {!loading && error && plans.length === 0 && <ErrorState title="Gagal memuat paket" description={error} />}
     </DashboardLayout>
   );
 }

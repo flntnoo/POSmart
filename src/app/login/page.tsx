@@ -5,9 +5,11 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
+import { useSession } from "@/contexts/SessionContext";
 
 export default function LoginPage() {
   const router = useRouter();
+  const { loginMock } = useSession();
   const [activeTab, setActiveTab] = useState<"owner" | "karyawan">("owner");
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
@@ -138,7 +140,7 @@ export default function LoginPage() {
               </div>
 
               <button
-                onClick={() => router.push("/dashboard")}
+                onClick={() => { loginMock("owner"); router.push("/dashboard"); }}
                 className="mt-2 w-full rounded-xl bg-[#FF6B00] py-3.5 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:bg-[#e85f00] active:scale-[0.99]">
                 Masuk sebagai Owner
               </button>
@@ -197,7 +199,10 @@ export default function LoginPage() {
                 </div>
               </div>
 
-              <button className="mt-2 w-full rounded-xl bg-slate-800 py-3.5 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:bg-slate-700 active:scale-[0.99]">
+              <button
+                onClick={() => { loginMock("kasir"); router.push("/pos"); }}
+                className="mt-2 w-full rounded-xl bg-slate-800 py-3.5 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:bg-slate-700 active:scale-[0.99]"
+              >
                 Masuk sebagai Karyawan
               </button>
             </div>

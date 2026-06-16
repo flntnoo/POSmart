@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { Check, Zap, Phone, ArrowRight } from "lucide-react";
+import { Check, Zap, ArrowRight } from "lucide-react";
 
 // ── Hero + Navbar (shared orange background) ──────────────────────────────────
 function HeroSection() {
@@ -164,7 +164,7 @@ function Features() {
 // ── Integrations ──────────────────────────────────────────────────────────────
 const INTEGRATIONS: { svg: string | null; abbr?: string; color?: string; name: string; desc: string; bg: string }[] = [
   { svg: "/LandingPage/Midtrans.svg",  name: "Midtrans",          desc: "Payment Gateway",   bg: "bg-blue-50"   },
-  { svg: "/LandingPage/Cloudify.svg",  name: "Cloudify",          desc: "Cloud Storage",     bg: "bg-indigo-50" },
+  { svg: "/LandingPage/Cloudify.svg",  name: "Cloudinary",        desc: "Cloud Storage",     bg: "bg-indigo-50" },
   { svg: "/LandingPage/Whatsapp.svg",  name: "WhatsApp Business", desc: "Notifikasi & Chat", bg: "bg-green-50"  },
   { svg: null, abbr: "G", color: "#EA4335", name: "Google OAuth", desc: "Login SSO",         bg: "bg-red-50"    },
 ];
@@ -197,12 +197,12 @@ function Integrations() {
         </div>
         <div className="flex items-center justify-between rounded-2xl border border-orange-200 bg-orange-50 px-8 py-6">
           <div>
-            <p className="text-base font-bold text-gray-900">Jelajahi 50+ Integrasi Tersedia</p>
-            <p className="mt-1 text-sm text-gray-500">Tokopedia, Shopee, GoPay, OVO, dan banyak lagi siap terhubung</p>
+            <p className="text-base font-bold text-gray-900">Integrasi siap dikembangkan</p>
+            <p className="mt-1 text-sm text-gray-500">Midtrans, WhatsApp, Google OAuth, dan Cloudinary disiapkan sebagai integrasi tahap berikutnya</p>
           </div>
           <Link href="/register"
             className="flex items-center gap-2 rounded-xl bg-[#FF6B00] px-5 py-2.5 text-sm font-bold text-white transition-colors hover:bg-[#E05E00]">
-            Jelajahi Semua <ArrowRight size={14} />
+            Mulai Konfigurasi <ArrowRight size={14} />
           </Link>
         </div>
       </div>
@@ -213,19 +213,19 @@ function Integrations() {
 // ── Pricing ───────────────────────────────────────────────────────────────────
 const PLANS = [
   {
-    name: "Starter",    priceLabel: "Gratis",    unit: "/bulan",
-    features: ["1 Kasir", "50 Produk", "Email Support"],
-    cta: "Get Started", popular: false,
+    name: "Free",       priceLabel: "Gratis",    unit: "/bulan",
+    features: ["1 Owner", "Data awal terbatas", "Payment record mock"],
+    cta: "Pilih Paket", popular: false,
   },
   {
-    name: "Business",   priceLabel: "Rp 299K",   unit: "/bulan",
-    features: ["5 Kasir", "Unlimited Produk", "Advanced Analytics", "Priority Support", "Integrasi Payment", "WhatsApp Notifications"],
-    cta: "Get Started", popular: true,
+    name: "Basic",      priceLabel: "Rp 299K",   unit: "/bulan",
+    features: ["Multi produk", "Inventory dasar", "Dashboard penjualan", "Payment record"],
+    cta: "Pilih Paket", popular: true,
   },
   {
-    name: "Enterprise", priceLabel: "Rp 599K",   unit: "/bulan",
-    features: ["Semua fitur Business", "Unlimited Kasir", "Multi-Outlet Support", "24/7 Support", "API Access", "Custom Role"],
-    cta: "Contact Sales", popular: false,
+    name: "Pro",        priceLabel: "Rp 599K",   unit: "/bulan",
+    features: ["Semua fitur Basic", "Multi outlet", "Analytics dasar", "Prioritas support"],
+    cta: "Pilih Paket", popular: false,
   },
 ];
 
@@ -247,7 +247,7 @@ function Pricing() {
               }`}>
               {plan.popular && (
                 <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
-                  <span className="rounded-full bg-[#FF6B00] px-4 py-1 text-[11px] font-bold text-white">Most Populer</span>
+                  <span className="rounded-full bg-[#FF6B00] px-4 py-1 text-[11px] font-bold text-white">Rekomendasi</span>
                 </div>
               )}
               <p className="mb-1 text-xs font-bold uppercase tracking-widest text-gray-400">{plan.name}</p>
@@ -270,10 +270,7 @@ function Pricing() {
                     ? "bg-[#FF6B00] text-white hover:bg-[#E05E00]"
                     : "border-2 border-gray-300 text-gray-700 hover:bg-gray-50"
                 }`}>
-                {plan.cta === "Contact Sales"
-                  ? <span className="flex items-center justify-center gap-1.5"><Phone size={13} /> Contact Sales</span>
-                  : <span className="flex items-center justify-center gap-1.5"><Zap size={13} /> {plan.cta}</span>
-                }
+                <span className="flex items-center justify-center gap-1.5"><Zap size={13} /> {plan.cta}</span>
               </Link>
             </div>
           ))}
@@ -288,7 +285,7 @@ function CTASection() {
   return (
     <section id="contact" className="py-20" style={{ background: "linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)" }}>
       <div className="mx-auto max-w-3xl px-6 text-center">
-        <h2 className="text-3xl font-extrabold text-white">Ready to simplify your business operations?</h2>
+        <h2 className="text-3xl font-extrabold text-white">Siap menyederhanakan operasional bisnis?</h2>
         <p className="mt-4 text-base text-gray-400">
           Bergabung dengan ratusan UMKM yang terus berkembang bersama
         </p>
@@ -300,9 +297,9 @@ function CTASection() {
             className="flex items-center gap-2 rounded-xl bg-[#FF6B00] px-7 py-3 text-sm font-bold text-white shadow-lg shadow-orange-900/30 transition-all hover:bg-[#E05E00] hover:-translate-y-0.5">
             Get Started Now <ArrowRight size={14} />
           </Link>
-          <a href="#contact"
+          <a href="#pricing"
             className="rounded-xl border border-gray-600 px-7 py-3 text-sm font-bold text-gray-300 transition-colors hover:border-gray-400 hover:text-white">
-            Contact Sales
+            Lihat Paket
           </a>
         </div>
       </div>

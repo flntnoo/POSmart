@@ -75,7 +75,7 @@ const defaultIntegrations: Integration[] = [
   {
     id: "midtrans", name: "Midtrans", desc: "Payment Gateway Indonesia",
     abbr: "MT", color: "#1E3A8A", textColor: "#FFFFFF",
-    badge: "Business", badgeColor: "bg-blue-100 text-blue-700",
+    badge: "Future", badgeColor: "bg-blue-100 text-blue-700",
     connected: true,
   },
   {
@@ -207,7 +207,7 @@ export default function SettingsPage() {
                 { label: "Total", value: String(total), color: "text-blue-600" },
                 { label: "Terhubung", value: String(connected), color: "text-green-600" },
                 { label: "Belum", value: String(total - connected), color: "text-orange-500" },
-                { label: "Tersedia", value: "50+", color: "text-purple-600" },
+                { label: "Future", value: "Siap", color: "text-purple-600" },
               ].map(s => (
                 <div key={s.label} className="flex flex-col items-center rounded-xl bg-gray-50 py-3">
                   <p className={`text-2xl font-extrabold ${s.color}`}>{s.value}</p>
@@ -274,12 +274,12 @@ export default function SettingsPage() {
                   <ExternalLink size={13} className="text-amber-700" />
                 </div>
                 <div>
-                  <p className="text-sm font-bold text-gray-900">50+ Integrasi Tersedia</p>
-                  <p className="text-[11px] text-gray-500">Tokopedia, Shopee, GoPay, OVO, dan banyak lagi</p>
+                  <p className="text-sm font-bold text-gray-900">Integrasi future-ready</p>
+                  <p className="text-[11px] text-gray-500">Konektor eksternal disiapkan untuk fase backend</p>
                 </div>
               </div>
               <button className="rounded-xl bg-[#FF6B00] px-3.5 py-2 text-xs font-bold text-white hover:bg-[#E05E00] transition-colors">
-                Jelajahi Semua
+                Lihat Rencana
               </button>
             </div>
           </div>
@@ -300,7 +300,7 @@ export default function SettingsPage() {
                 </div>
               </div>
               <p className="mt-2.5 text-sm font-bold text-gray-900">{storeName || "Nama Toko"}</p>
-              <p className="text-[11px] text-gray-400">POSmart Business</p>
+              <p className="text-[11px] text-gray-400">POSmart MVP</p>
             </div>
 
             <div className="border-t border-gray-100 pt-4 space-y-3">

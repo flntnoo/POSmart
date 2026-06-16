@@ -1,0 +1,290 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  owner
+  admin
+  kasir
+}
+
+enum SubscriptionPackage {
+  Free
+  Basic
+  Pro
+}
+
+enum SubscriptionStatus {
+  active
+  pending
+  expired
+  cancelled
+}
+
+enum PaymentStatus {
+  pending
+  success
+  failed
+  expired
+}
+
+enum NotificationType {
+  activation
+  low_stock
+  renewal
+  system
+}
+
+enum NotificationStatus {
+  pending
+  sent
+  failed
+}
+
+enum TransactionMethod {
+  Tunai
+  Transfer
+  QRIS
+  Kartu
+}
+
+enum TransactionStatus {
+  Sukses
+  Pending
+  Batal
+}
+
+model User {
+  userId       Int       @id @default(autoincrement()) @map("user_id")
+  nama         String    @db.VarChar(100)
+  email        String    @unique @db.VarChar(150)
+  passwordHash String    @map("password_hash") @db.VarChar(255)
+  role         UserRole  @default(kasir)
+  ownerUserId  Int?      @map("owner_user_id")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  ownerUser     User?              @relation("WorkspaceUsers", fields: [ownerUserId], references: [userId], onDelete: Restrict, onUpdate: Cascade)
+  teamMembers   User[]             @relation("WorkspaceUsers")
+  outlets       Outlet[]
+  ownedCategories Category[]       @relation("CategoryOwner")
+  ownedSuppliers  Supplier[]       @relation("SupplierOwner")
+  ownedCustomers  Customer[]       @relation("CustomerOwner")
+  transactions  Transaction[]
+  subscriptions Subscription[]
+  notifications NotificationLog[]
+  auditLogs     AuditLog[]
+
+  @@index([ownerUserId])
+  @@map("users")
+}
+
+model Outlet {
+  outletId  Int      @id @default(autoincrement()) @map("outlet_id")
+  userId    Int      @map("user_id")
+  nama      String   @db.VarChar(120)
+  alamat    String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user         User          @relation(fields: [userId], references: [userId], onDelete: Restrict, onUpdate: Cascade)
+  products     Product[]
+  inventory    Inventory[]
+  transactions Transaction[]
+
+  @@index([userId])
+  @@map("outlets")
+}
+
+model Category {
+  categoryId  Int    @id @default(autoincrement()) @map("category_id")
+  ownerUserId Int    @map("owner_user_id")
+  nama        String @db.VarChar(80)
+
+  owner    User      @relation("CategoryOwner", fields: [ownerUserId], references: [userId], onDelete: Restrict, onUpdate: Cascade)
+  products Product[]
+
+  @@unique([ownerUserId, nama])
+  @@index([ownerUserId])
+  @@map("categories")
+}
+
+model Supplier {
+  supplierId  Int     @id @default(autoincrement()) @map("supplier_id")
+  ownerUserId Int     @map("owner_user_id")
+  nama        String  @db.VarChar(120)
+  kontak      String? @db.VarChar(100)
+
+  owner    User      @relation("SupplierOwner", fields: [ownerUserId], references: [userId], onDelete: Restrict, onUpdate: Cascade)
+  products Product[]
+
+  @@unique([ownerUserId, nama])
+  @@index([ownerUserId])
+  @@map("suppliers")
+}
+
+model Product {
+  productId  Int      @id @default(autoincrement()) @map("product_id")
+  categoryId Int?     @map("category_id")
+  supplierId Int?     @map("supplier_id")
+  outletId   Int?     @map("outlet_id")
+  nama       String   @db.VarChar(120)
+  harga      Decimal  @default(0) @db.Decimal(12, 2)
+  sku        String?  @db.VarChar(80)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  category           Category?           @relation(fields: [categoryId], references: [categoryId], onDelete: SetNull, onUpdate: Cascade)
+  supplier           Supplier?           @relation(fields: [supplierId], references: [supplierId], onDelete: SetNull, onUpdate: Cascade)
+  outlet             Outlet?             @relation(fields: [outletId], references: [outletId], onDelete: SetNull, onUpdate: Cascade)
+  inventory          Inventory[]
+  transactionDetails TransactionDetail[]
+
+  @@unique([outletId, sku])
+  @@index([categoryId])
+  @@index([supplierId])
+  @@index([outletId])
+  @@map("products")
+}
+
+model Inventory {
+  inventoryId Int      @id @default(autoincrement()) @map("inventory_id")
+  productId   Int      @map("product_id")
+  outletId    Int      @map("outlet_id")
+  stok        Int      @default(0)
+  minStock    Int      @default(5) @map("min_stock")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  product Product @relation(fields: [productId], references: [productId], onDelete: Cascade, onUpdate: Cascade)
+  outlet  Outlet  @relation(fields: [outletId], references: [outletId], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([productId, outletId])
+  @@index([productId])
+  @@index([outletId])
+  @@map("inventory")
+}
+
+model Customer {
+  customerId  Int     @id @default(autoincrement()) @map("customer_id")
+  ownerUserId Int     @map("owner_user_id")
+  nama        String  @db.VarChar(120)
+  telepon     String? @db.VarChar(30)
+  email       String? @db.VarChar(150)
+
+  owner        User          @relation("CustomerOwner", fields: [ownerUserId], references: [userId], onDelete: Restrict, onUpdate: Cascade)
+  transactions Transaction[]
+
+  @@index([ownerUserId])
+  @@map("customers")
+}
+
+model Transaction {
+  transactionId Int               @id @default(autoincrement()) @map("transaction_id")
+  customerId    Int?              @map("customer_id")
+  userId        Int               @map("user_id")
+  outletId      Int               @map("outlet_id")
+  tanggal       DateTime          @default(now())
+  total         Decimal           @default(0) @db.Decimal(14, 2)
+  metode        TransactionMethod
+  status        TransactionStatus @default(Sukses)
+
+  customer Customer?           @relation(fields: [customerId], references: [customerId], onDelete: SetNull, onUpdate: Cascade)
+  user     User                @relation(fields: [userId], references: [userId], onDelete: Restrict, onUpdate: Cascade)
+  outlet   Outlet              @relation(fields: [outletId], references: [outletId], onDelete: Restrict, onUpdate: Cascade)
+  details  TransactionDetail[]
+
+  @@index([customerId])
+  @@index([userId])
+  @@index([outletId])
+  @@index([tanggal])
+  @@index([status])
+  @@map("transactions")
+}
+
+model TransactionDetail {
+  detailId      Int     @id @default(autoincrement()) @map("detail_id")
+  transactionId Int     @map("transaction_id")
+  productId     Int     @map("product_id")
+  quantity      Int
+  unitPrice     Decimal @map("unit_price") @db.Decimal(12, 2)
+  subtotal      Decimal @db.Decimal(14, 2)
+
+  transaction Transaction @relation(fields: [transactionId], references: [transactionId], onDelete: Cascade, onUpdate: Cascade)
+  product     Product     @relation(fields: [productId], references: [productId], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([transactionId])
+  @@index([productId])
+  @@map("transaction_details")
+}
+
+model Subscription {
+  subscriptionId Int                 @id @default(autoincrement()) @map("subscription_id")
+  userId         Int                 @map("user_id")
+  paket          SubscriptionPackage
+  status         SubscriptionStatus  @default(active)
+  startDate      DateTime?           @map("start_date") @db.Date
+  endDate        DateTime?           @map("end_date") @db.Date
+
+  user     User      @relation(fields: [userId], references: [userId], onDelete: Cascade, onUpdate: Cascade)
+  payments Payment[]
+
+  @@index([userId])
+  @@map("subscriptions")
+}
+
+model Payment {
+  paymentId         Int           @id @default(autoincrement()) @map("payment_id")
+  subscriptionId    Int           @map("subscription_id")
+  jumlah            Decimal       @db.Decimal(12, 2)
+  metode            String?       @db.VarChar(40)
+  status            PaymentStatus @default(pending)
+  provider          String?       @db.VarChar(40)
+  externalReference String?       @map("external_reference") @db.VarChar(120)
+  paymentDate       DateTime      @default(now()) @map("payment_date")
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [subscriptionId], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([subscriptionId])
+  @@index([status])
+  @@map("payments")
+}
+
+model NotificationLog {
+  notifId   Int                @id @default(autoincrement()) @map("notif_id")
+  userId    Int                @map("user_id")
+  pesan     String
+  tipe      NotificationType   @default(system)
+  status    NotificationStatus @default(sent)
+  dedupeKey String?            @map("dedupe_key") @db.VarChar(180)
+  createdAt DateTime           @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [userId], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([dedupeKey])
+  @@index([userId])
+  @@index([tipe])
+  @@index([createdAt])
+  @@map("notification_logs")
+}
+
+model AuditLog {
+  auditId    Int      @id @default(autoincrement()) @map("audit_id")
+  userId     Int      @map("user_id")
+  aksi       String   @db.VarChar(255)
+  module     String   @db.VarChar(80)
+  entityType String?  @map("entity_type") @db.VarChar(80)
+  entityId   String?  @map("entity_id") @db.VarChar(80)
+  metadata   Json?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [userId], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([userId])
+  @@index([module])
+  @@index([createdAt])
+  @@map("audit_logs")
+}

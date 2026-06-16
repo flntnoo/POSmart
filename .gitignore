@@ -39,3 +39,13 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Reference
+PRD_POSmart.md
+TSM_POSmart.md
+FSD_POSmart.md
+
+#Implementation
+BACKEND_INTEGRATION_NOTES.md
+AGENTS.md
+CLAUDE.md

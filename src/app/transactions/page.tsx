@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import DashboardLayout from "@/layouts/DashboardLayout";
+import { useSession } from "@/contexts/SessionContext";
 import {
-  mockTransactions, formatRp,
+  toTransactionView, formatRp,
   type Transaction, type TransactionStatus, type PaymentMethod,
 } from "@/data/transactions";
+import { customerService, productService, transactionService } from "@/services";
 import {
   Search, Plus, X, Printer, FileDown,
   CheckCircle2, Clock, XCircle, Receipt,
@@ -37,12 +39,30 @@ function formatJumlah(total: number, status: TransactionStatus) {
 }
 
 export default function TransactionsPage() {
+  const { currentUser } = useSession();
   const [search, setSearch]       = useState("");
   const [statusFilter, setStatus] = useState<StatusFilter>("Semua");
   const [methodFilter, setMethod] = useState<MethodFilter>("Semua");
   const [detail, setDetail]       = useState<Transaction | null>(null);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
 
-  const transactions = mockTransactions;
+  useEffect(() => {
+    let mounted = true;
+    Promise.all([
+      transactionService.list({ userId: currentUser?.userId }),
+      productService.list({ userId: currentUser?.userId }),
+      customerService.list({ userId: currentUser?.userId }),
+    ]).then(([transactionResponse, productResponse, customerResponse]) => {
+      if (!mounted) return;
+      const domainTransactions = transactionResponse.success && transactionResponse.data ? transactionResponse.data : [];
+      const products = productResponse.success && productResponse.data ? productResponse.data : [];
+      const customers = customerResponse.success && customerResponse.data ? customerResponse.data : [];
+      setTransactions(domainTransactions.map((transaction) => toTransactionView(transaction, { products, customers })));
+    });
+    return () => {
+      mounted = false;
+    };
+  }, [currentUser?.userId]);
 
   const stats = useMemo(() => {
     const sukses   = transactions.filter(t => t.status === "Sukses");
@@ -70,12 +90,12 @@ export default function TransactionsPage() {
   return (
     <DashboardLayout>
       {/* Header */}
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Transaksi</h1>
           <p className="mt-0.5 text-sm text-gray-500">Riwayat dan detail semua transaksi penjualan</p>
         </div>
-        <div className="flex items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2.5">
           <button className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-600 shadow-sm transition-colors hover:bg-gray-50">
             <FileDown size={14} />
             Export CSV
@@ -88,7 +108,7 @@ export default function TransactionsPage() {
       </div>
 
       {/* Stats row */}
-      <div className="mb-5 grid grid-cols-4 gap-4">
+      <div className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {/* Card 1 – orange gradient */}
         <div
           className="relative overflow-hidden rounded-[20px] p-5"
@@ -157,7 +177,7 @@ export default function TransactionsPage() {
       </div>
 
       {/* Filter row */}
-      <div className="mb-4 flex items-center gap-3">
+      <div className="mb-4 flex flex-wrap items-center gap-3">
         {/* Search */}
         <div className="relative">
           <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -166,12 +186,12 @@ export default function TransactionsPage() {
             placeholder="Cari transaksi atau pelanggan..."
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="w-60 rounded-xl border border-gray-200 bg-white py-2 pl-10 pr-4 text-sm text-gray-700 placeholder:text-gray-400 shadow-sm outline-none focus:border-orange-300"
+            className="w-full rounded-xl border border-gray-200 bg-white py-2 pl-10 pr-4 text-sm text-gray-700 placeholder:text-gray-400 shadow-sm outline-none focus:border-orange-300 sm:w-60"
           />
         </div>
 
         {/* Status tabs */}
-        <div className="flex items-center gap-1 rounded-xl bg-gray-100/80 p-1">
+        <div className="flex max-w-full items-center gap-1 overflow-x-auto rounded-xl bg-gray-100/80 p-1">
           {statusTabs.map(s => (
             <button
               key={s}
@@ -198,7 +218,7 @@ export default function TransactionsPage() {
           ))}
         </select>
 
-        <div className="flex-1" />
+        <div className="hidden flex-1 xl:block" />
 
         <span className="rounded-lg bg-orange-50 px-3 py-1.5 text-sm font-semibold text-orange-500">
           {filtered.length} transaksi
@@ -206,9 +226,9 @@ export default function TransactionsPage() {
       </div>
 
       {/* Content */}
-      <div className="flex items-start gap-5">
+      <div className="flex flex-col items-start gap-5 xl:flex-row">
         {/* Table */}
-        <div className={`overflow-hidden rounded-[20px] bg-white shadow-sm ${detail ? "flex-1 min-w-0" : "w-full"}`}>
+        <div className={`overflow-x-auto rounded-[20px] bg-white shadow-sm ${detail ? "w-full xl:min-w-0 xl:flex-1" : "w-full"}`}>
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100">

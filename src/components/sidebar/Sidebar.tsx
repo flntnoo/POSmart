@@ -1,9 +1,17 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
 import SidebarItem from "./SidebarItem";
-import { mainMenu, managementMenu, systemMenu } from "./navigation";
+import { getSidebarMenus } from "./navigation";
+import { useSession } from "@/contexts/SessionContext";
+import { roleLabels } from "@/lib/rbac";
 
 export default function Sidebar() {
+  const { currentUser, currentRole } = useSession();
+  const role = currentRole ?? "owner";
+  const { mainMenu, managementMenu, systemMenu } = getSidebarMenus(role);
+
   return (
     <aside className="group/sidebar fixed left-0 top-0 z-40 flex h-screen w-[72px] flex-col bg-[#F4E6D4] overflow-hidden transition-[width] duration-300 ease-in-out hover:w-64">
 
@@ -103,11 +111,13 @@ export default function Sidebar() {
         <Link href="/profile" className="block rounded-xl bg-white p-2.5 transition-colors hover:bg-orange-50">
           <div className="flex items-center">
             <div className="h-8 w-8 flex-shrink-0 rounded-full bg-gray-800 flex items-center justify-center">
-              <span className="text-[10px] font-bold text-white">LH</span>
+              <span className="text-[10px] font-bold text-white">
+                {(currentUser?.nama ?? "G").split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase()}
+              </span>
             </div>
             <div className="min-w-0 overflow-hidden max-w-0 group-hover/sidebar:max-w-[160px] opacity-0 group-hover/sidebar:opacity-100 ml-0 group-hover/sidebar:ml-3 transition-all duration-300 whitespace-nowrap">
-              <p className="text-xs font-semibold text-gray-800 truncate">Luthfi Halimawan</p>
-              <p className="text-[10px] font-medium text-orange-500 truncate">Owner</p>
+              <p className="text-xs font-semibold text-gray-800 truncate">{currentUser?.nama ?? "Guest"}</p>
+              <p className="text-[10px] font-medium text-orange-500 truncate">{roleLabels[role]}</p>
             </div>
           </div>
         </Link>

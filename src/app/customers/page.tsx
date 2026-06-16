@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import DashboardLayout from "@/layouts/DashboardLayout";
 import {
-  mockCustomers, formatRpShort, avatarColor, calcTier,
+  formatRpShort, avatarColor, calcTier, toCustomerView,
   type Customer, type CustomerTier,
 } from "@/data/customers";
+import { auditLogService, customerService, transactionService } from "@/services";
+import { useSession } from "@/contexts/SessionContext";
 import {
   Search, UserPlus, X, Phone, Calendar,
   ChevronRight, Crown, Star, Award, Users, Pencil, History,
@@ -26,12 +28,31 @@ type AddForm = { name: string; email: string; phone: string; purchases: string; 
 const emptyAdd: AddForm = { name: "", email: "", phone: "", purchases: "", qty: "", address: "" };
 
 export default function CustomersPage() {
+  const { currentUser } = useSession();
+  const currentUserId = currentUser?.userId ?? "user-owner-001";
   const [search, setSearch]   = useState("");
   const [tierFilter, setTier] = useState<TierFilter>("Semua");
   const [detail, setDetail]   = useState<Customer | null>(null);
   const [showAdd, setShowAdd] = useState(false);
   const [addForm, setAddForm] = useState<AddForm>(emptyAdd);
-  const [customers, setCustomers] = useState<Customer[]>(mockCustomers);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+
+  useEffect(() => {
+    let mounted = true;
+    Promise.all([
+      customerService.list({ userId: currentUserId }),
+      transactionService.list({ userId: currentUserId }),
+    ]).then(([customerResponse, transactionResponse]) => {
+      if (!mounted) return;
+      const transactions = transactionResponse.success && transactionResponse.data ? transactionResponse.data : [];
+      if (customerResponse.success && customerResponse.data) {
+        setCustomers(customerResponse.data.map((customer) => toCustomerView(customer, transactions)));
+      }
+    });
+    return () => {
+      mounted = false;
+    };
+  }, [currentUserId]);
 
   function handleAddSubmit(e: { preventDefault(): void }) {
     e.preventDefault();
@@ -55,7 +76,23 @@ export default function CustomersPage() {
       recentItems:       [],
       recentTx:          [],
     };
-    setCustomers(prev => [newCustomer, ...prev]);
+    customerService.create({
+      userId: currentUserId,
+      nama: newCustomer.name,
+      email: newCustomer.email,
+      telepon: newCustomer.phone,
+    }).then((response) => {
+      if (response.success && response.data) {
+        setCustomers(prev => [toCustomerView(response.data, []), ...prev]);
+      } else {
+        setCustomers(prev => [newCustomer, ...prev]);
+      }
+    });
+    void auditLogService.create({
+      userId: currentUserId,
+      aksi: `Membuat pelanggan ${newCustomer.name}`,
+      module: "customers",
+    });
     setAddForm(emptyAdd);
     setShowAdd(false);
   }
@@ -63,7 +100,7 @@ export default function CustomersPage() {
   const stats = useMemo(() => {
     const aktif    = customers.filter(c => c.status === "Aktif").length;
     const total    = customers.reduce((s, c) => s + c.totalSpent, 0);
-    const avg      = Math.round(total / customers.length);
+    const avg      = customers.length > 0 ? Math.round(total / customers.length) : 0;
     const top4     = [...customers].sort((a, b) => b.totalSpent - a.totalSpent).slice(0, 4);
     return { aktif, avg, top4 };
   }, [customers]);
@@ -399,10 +436,6 @@ export default function CustomersPage() {
                 <p className="mb-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">Riwayat Transaksi</p>
                 <div className="space-y-3">
                   {detail.recentTx.map((tx, i) => {
-                    const millions  = tx.amount >= 1_000_000;
-                    const display   = millions
-                      ? "+" + (tx.amount / 1_000_000).toFixed(3).replace(".", ",") + ""
-                      : "+" + (tx.amount / 1_000).toFixed(0) + ".000";
                     return (
                       <div key={i} className="flex items-center gap-2.5">
                         <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-orange-50 text-[10px] font-bold text-orange-500">
