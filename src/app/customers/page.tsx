@@ -83,7 +83,8 @@ export default function CustomersPage() {
       telepon: newCustomer.phone,
     }).then((response) => {
       if (response.success && response.data) {
-        setCustomers(prev => [toCustomerView(response.data, []), ...prev]);
+        const createdCustomer = response.data;
+        setCustomers(prev => [toCustomerView(createdCustomer, []), ...prev]);
       } else {
         setCustomers(prev => [newCustomer, ...prev]);
       }

@@ -1,6 +1,5 @@
-import { mockUsers } from "@/data/mockData";
 import type { User, UserRole } from "@/types/posmart";
-import { fail, ok } from "./api";
+import { apiRequest, jsonBody } from "./api";
 
 export type LoginInput = {
   email: string;
@@ -16,39 +15,25 @@ export type RegisterInput = {
 };
 
 export const authService = {
-  async login(input: LoginInput) {
-    const user = mockUsers.find((item) => item.email === input.email);
-    if (!user) {
-      return fail<User>("Email atau password salah", { email: "Email tidak terdaftar" });
-    }
-    if (input.role && user.role !== input.role) {
-      return fail<User>("Role tidak sesuai", { role: "Akun tidak memiliki akses role tersebut" });
-    }
-    return ok("Login berhasil", user);
+  login(input: LoginInput) {
+    return apiRequest<User>("/api/auth/login", {
+      method: "POST",
+      body: jsonBody(input),
+    });
   },
 
-  async register(input: RegisterInput) {
-    if (mockUsers.some((item) => item.email === input.email)) {
-      return fail<User>("Email sudah digunakan", { email: "Email sudah terdaftar" });
-    }
-    const now = new Date().toISOString();
-    const user: User = {
-      userId: `user-${Date.now()}`,
-      nama: input.nama,
-      email: input.email,
-      role: input.role ?? "owner",
-      createdAt: now,
-      updatedAt: now,
-    };
-    mockUsers.unshift(user);
-    return ok("Registrasi berhasil", user);
+  register(input: RegisterInput) {
+    return apiRequest<User>("/api/auth/register", {
+      method: "POST",
+      body: jsonBody(input),
+    });
   },
 
-  async logout() {
-    return ok("Logout berhasil", null);
+  logout() {
+    return apiRequest<null>("/api/auth/logout", { method: "POST" });
   },
 
-  async session() {
-    return ok("Session aktif", mockUsers[0]);
+  session() {
+    return apiRequest<User>("/api/auth/session");
   },
 };

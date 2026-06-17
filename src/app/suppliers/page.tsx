@@ -90,7 +90,8 @@ export default function SuppliersPage() {
       kontak: newSupplier.phone || newSupplier.email,
     }).then((response) => {
       if (response.success && response.data) {
-        setSuppliers(prev => [toSupplierView(response.data, prev.length, []), ...prev]);
+        const createdSupplier = response.data;
+        setSuppliers(prev => [toSupplierView(createdSupplier, prev.length, []), ...prev]);
       } else {
         setSuppliers(prev => [newSupplier, ...prev]);
       }

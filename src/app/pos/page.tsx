@@ -6,11 +6,9 @@ import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/AppState";
 import { useSession } from "@/contexts/SessionContext";
 import {
-  auditLogService,
   categoryService,
   customerService,
   inventoryService,
-  notificationService,
   outletService,
   productService,
   transactionService,
@@ -331,52 +329,17 @@ export default function POSPage() {
       return;
     }
 
-    const updatedInventory: Inventory[] = [];
-    for (const item of itemsSnapshot) {
-      const response = await inventoryService.adjust({
-        productId: item.product.productId,
-        outletId: activeOutletId,
-        quantity: item.quantity,
-        type: "out",
+    const inventoryResponse = await inventoryService.list({ outletId: activeOutletId });
+    if (inventoryResponse.success && inventoryResponse.data) {
+      setInventory((current) => {
+        const refreshedById = new Map(inventoryResponse.data!.map((item) => [item.inventoryId, item]));
+        const existingIds = new Set(current.map((item) => item.inventoryId));
+        return [
+          ...current.map((item) => refreshedById.get(item.inventoryId) ?? item),
+          ...inventoryResponse.data!.filter((item) => !existingIds.has(item.inventoryId)),
+        ];
       });
-
-      if (!response.success || !response.data) {
-        setValidationMessage(response.errors?.stok ?? response.message);
-        setCheckoutLoading(false);
-        return;
-      }
-
-      updatedInventory.push(response.data);
-
-      await auditLogService.create({
-        userId: currentUser.userId,
-        aksi: `Mengurangi stok ${item.product.nama} sebanyak ${item.quantity}`,
-        module: "inventory",
-      });
-
-      if (response.data.stok <= response.data.minStock) {
-        await notificationService.createLowStock({
-          userId: currentUser.userId,
-          productId: item.product.productId,
-          outletId: activeOutletId,
-          productName: item.product.nama,
-          outletName: selectedOutlet.nama,
-          stock: response.data.stok,
-        });
-      }
     }
-
-    if (updatedInventory.length > 0) {
-      setInventory((current) =>
-        current.map((item) => updatedInventory.find((updated) => updated.inventoryId === item.inventoryId) ?? item),
-      );
-    }
-
-    await auditLogService.create({
-      userId: currentUser.userId,
-      aksi: `Membuat transaksi ${transactionResponse.data.transactionId}`,
-      module: "transactions",
-    });
 
     const customer = customers.find((item) => item.customerId === selectedCustomerId);
     const amountPaid = paymentMethod === "Tunai" ? cashReceived : total;
@@ -721,7 +684,7 @@ export default function POSPage() {
                 </div>
               </div>
               <h2 className="text-center text-xl font-extrabold text-gray-900">Transaksi Berhasil</h2>
-              <p className="mt-1 text-center text-sm text-gray-500">Stok sudah dikurangi dan transaksi tersimpan di mock data.</p>
+              <p className="mt-1 text-center text-sm text-gray-500">Stok sudah dikurangi dan transaksi tersimpan di backend.</p>
 
               <div className="my-6 space-y-3 rounded-2xl bg-gray-50 p-4 text-sm">
                 <SummaryRow label="Transaction ID" value={summary.transaction.transactionId} />

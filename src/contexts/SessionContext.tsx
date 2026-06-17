@@ -1,7 +1,7 @@
 "use client";
 
-import { createContext, ReactNode, useContext, useMemo, useState } from "react";
-import { mockUsers } from "@/data/mockData";
+import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { authService } from "@/services";
 import type { User, UserRole } from "@/types/posmart";
 
 type SessionContextValue = {
@@ -13,28 +13,61 @@ type SessionContextValue = {
   logoutMock: () => void;
   setSessionUser: (user: User) => void;
   switchRole: (role: UserRole) => void;
+  refreshSession: () => Promise<User | null>;
 };
 
 const SessionContext = createContext<SessionContextValue | null>(null);
 
-function getUserForRole(role: UserRole) {
-  return mockUsers.find((user) => user.role === role) ?? mockUsers[0];
-}
+const demoCredentials: Record<UserRole, { email: string; password: string }> = {
+  owner: { email: "owner@posmart.test", password: "password123" },
+  admin: { email: "admin@posmart.test", password: "password123" },
+  kasir: { email: "kasir@posmart.test", password: "password123" },
+};
 
 export function SessionProvider({ children }: { children: ReactNode }) {
-  const [currentUser, setCurrentUser] = useState<User | null>(mockUsers[0]);
-  const [loading] = useState(false);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const refreshSession = useCallback(async () => {
+    setLoading(true);
+    const response = await authService.session();
+    const user = response.success && response.data ? response.data : null;
+    setCurrentUser(user);
+    setLoading(false);
+    return user;
+  }, []);
+
+  useEffect(() => {
+    queueMicrotask(() => {
+      void refreshSession();
+    });
+  }, [refreshSession]);
+
+  const loginMock = useCallback((role: UserRole = "owner") => {
+    void authService.login({ ...demoCredentials[role], role }).then((response) => {
+      if (response.success && response.data) setCurrentUser(response.data);
+    });
+  }, []);
+
+  const logoutMock = useCallback(() => {
+    void authService.logout().finally(() => setCurrentUser(null));
+  }, []);
+
+  const switchRole = useCallback((role: UserRole) => {
+    loginMock(role);
+  }, [loginMock]);
 
   const value = useMemo<SessionContextValue>(() => ({
     currentUser,
     currentRole: currentUser?.role ?? null,
     loading,
     isAuthenticated: Boolean(currentUser),
-    loginMock: (role = "owner") => setCurrentUser(getUserForRole(role)),
-    logoutMock: () => setCurrentUser(null),
-    setSessionUser: (user) => setCurrentUser(user),
-    switchRole: (role) => setCurrentUser(getUserForRole(role)),
-  }), [currentUser, loading]);
+    loginMock,
+    logoutMock,
+    setSessionUser: setCurrentUser,
+    switchRole,
+    refreshSession,
+  }), [currentUser, loading, loginMock, logoutMock, refreshSession, switchRole]);
 
   return (
     <SessionContext.Provider value={value}>

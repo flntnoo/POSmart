@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import DashboardLayout from "@/layouts/DashboardLayout";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/AppState";
-import { auditLogService, notificationService, paymentService, subscriptionService } from "@/services";
+import { paymentService, subscriptionService } from "@/services";
 import { useSession } from "@/contexts/SessionContext";
 import type { Payment, Subscription } from "@/types/posmart";
 import { CheckCircle2, CreditCard, Info, RefreshCw } from "lucide-react";
@@ -41,7 +41,7 @@ export default function PaymentsPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true);
     setError("");
     const [paymentResponse, subscriptionResponse] = await Promise.all([
@@ -54,11 +54,13 @@ export default function PaymentsPage() {
 
     if (subscriptionResponse.success && subscriptionResponse.data) setSubscriptions(subscriptionResponse.data);
     setLoading(false);
-  }
+  }, []);
 
   useEffect(() => {
-    load();
-  }, []);
+    queueMicrotask(() => {
+      void load();
+    });
+  }, [load]);
 
   const userSubscriptions = useMemo(() => {
     if (!currentUser) return subscriptions;
@@ -81,25 +83,12 @@ export default function PaymentsPage() {
     setProcessing(true);
     setError("");
     const paymentResponse = await paymentService.updateStatus(latestPayment.paymentId, "success");
-    const subscriptionResponse = await subscriptionService.activate(latestSubscription.subscriptionId);
 
-    if (!paymentResponse.success || !subscriptionResponse.success) {
-      setError(paymentResponse.message || subscriptionResponse.message);
+    if (!paymentResponse.success) {
+      setError(paymentResponse.message);
       setProcessing(false);
       return;
     }
-
-    await auditLogService.create({
-      userId: currentUser.userId,
-      aksi: `Mengubah payment ${latestPayment.paymentId} menjadi success`,
-      module: "payments",
-    });
-
-    await notificationService.create({
-      userId: currentUser.userId,
-      tipe: "activation",
-      pesan: `Pembayaran paket ${latestSubscription.paket} berhasil disimulasikan. Subscription aktif.`,
-    });
 
     setSuccess("Payment mock berhasil. Subscription sudah aktif.");
     await load();
@@ -124,7 +113,7 @@ export default function PaymentsPage() {
 
       <div className="mb-5 flex items-start gap-3 rounded-[20px] border border-blue-100 bg-blue-50 p-4 text-sm text-blue-700">
         <Info size={17} className="mt-0.5 flex-shrink-0" />
-        <p>Midtrans masih placeholder. Tombol simulasi hanya mengubah status payment dan subscription pada mock service frontend.</p>
+        <p>Midtrans masih placeholder. Tombol simulasi mengubah status payment di backend dan mengaktifkan subscription.</p>
       </div>
 
       {success && (
@@ -174,7 +163,7 @@ export default function PaymentsPage() {
 
           <div className="overflow-x-auto rounded-[20px] bg-white shadow-sm">
             {userPayments.length === 0 ? (
-              <EmptyState title="Belum ada payment record" description="Pilih paket subscription terlebih dahulu untuk membuat payment record mock." actionHref="/subscription" actionLabel="Pilih Paket" />
+              <EmptyState title="Belum ada payment record" description="Pilih paket subscription terlebih dahulu untuk membuat payment record." actionHref="/subscription" actionLabel="Pilih Paket" />
             ) : (
               <table className="w-full text-sm">
                 <thead>
