@@ -1,4 +1,5 @@
 import bcrypt from "bcryptjs";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { ApiError } from "@/lib/api-response";
 import { toSessionUser, type SessionUser } from "@/lib/auth";
@@ -37,6 +38,25 @@ async function ensureOutletAccess(outletId: number, user: SessionUser, db: Prism
   const outlet = await db.outlet.findFirst({ where: { outletId, userId: ownerId(user) } });
   if (!outlet) throw new ApiError(404, "Outlet tidak ditemukan");
   return outlet;
+}
+
+async function ensureWorkspaceUserAccess(userId: number, user: SessionUser, db: PrismaTx = prisma) {
+  const workspaceUser = await db.user.findFirst({
+    where: {
+      userId,
+      OR: [{ userId: ownerId(user) }, { ownerUserId: ownerId(user) }],
+    },
+  });
+  if (!workspaceUser) throw new ApiError(403, "Akses ditolak");
+  return workspaceUser;
+}
+
+async function ensureProductOutletAccess(productId: number, outletId: number, user: SessionUser, db: PrismaTx = prisma) {
+  const product = await db.product.findFirst({
+    where: { productId, outletId, outlet: { userId: ownerId(user) } },
+  });
+  if (!product) throw new ApiError(404, "Produk tidak ditemukan di outlet ini");
+  return product;
 }
 
 async function createAudit(db: PrismaTx, userId: number, module: string, aksi: string, entityType?: string, entityId?: string) {
@@ -300,7 +320,7 @@ export async function createInventory(user: SessionUser, input: { productId: str
   const productId = numericId(input.productId, "productId");
   const outletId = numericId(input.outletId, "outletId");
   await ensureOutletAccess(outletId, user);
-  await getProduct(user, productId);
+  await ensureProductOutletAccess(productId, outletId, user);
   const row = await prisma.inventory.create({ data: { productId, outletId, stok: input.stok, minStock: input.minStock ?? 5 } });
   await createAudit(prisma, user.userId, "inventory", `Membuat inventory produk ${productId}`, "inventory", String(row.inventoryId));
   if (row.stok <= row.minStock) await createLowStockNotification(prisma, ownerId(user), productId, outletId, row.stok);
@@ -311,13 +331,26 @@ export async function adjustInventory(user: SessionUser, input: { productId: str
   const productId = numericId(input.productId, "productId");
   const outletId = numericId(input.outletId, "outletId");
   await ensureOutletAccess(outletId, user);
+  await ensureProductOutletAccess(productId, outletId, user);
 
   const row = await prisma.$transaction(async (tx) => {
     const current = await tx.inventory.findUnique({ where: { productId_outletId: { productId, outletId } } });
     if (!current) throw new ApiError(404, "Inventory tidak ditemukan");
-    const stok = input.type === "set" ? input.quantity : input.type === "in" ? current.stok + input.quantity : current.stok - input.quantity;
-    if (stok < 0) throw new ApiError(400, "Validasi gagal", { stok: "Stok tidak boleh negatif" });
-    const updated = await tx.inventory.update({ where: { inventoryId: current.inventoryId }, data: { stok } });
+
+    if (input.type === "out") {
+      const result = await tx.inventory.updateMany({
+        where: { inventoryId: current.inventoryId, stok: { gte: input.quantity } },
+        data: { stok: { decrement: input.quantity } },
+      });
+      if (result.count !== 1) throw new ApiError(400, "Validasi gagal", { stok: "Stok tidak boleh negatif" });
+    } else {
+      await tx.inventory.update({
+        where: { inventoryId: current.inventoryId },
+        data: input.type === "in" ? { stok: { increment: input.quantity } } : { stok: input.quantity },
+      });
+    }
+
+    const updated = await tx.inventory.findUniqueOrThrow({ where: { inventoryId: current.inventoryId } });
     await createAudit(tx, user.userId, "inventory", `Menyesuaikan stok produk ${productId}`, "inventory", String(updated.inventoryId));
     if (updated.stok <= updated.minStock) await createLowStockNotification(tx, ownerId(user), productId, outletId, updated.stok);
     return updated;
@@ -373,6 +406,7 @@ export async function listTransactions(user: SessionUser, filters: URLSearchPara
   const rows = await prisma.transaction.findMany({
     where: {
       outlet: { userId: ownerId(user) },
+      ...(user.role === "kasir" ? { userId: user.userId } : {}),
       ...(outletId ? { outletId: numericId(outletId, "outletId") } : {}),
       ...(customerId ? { customerId: numericId(customerId, "customerId") } : {}),
     },
@@ -382,7 +416,14 @@ export async function listTransactions(user: SessionUser, filters: URLSearchPara
 }
 
 export async function getTransaction(user: SessionUser, id: number) {
-  const row = await prisma.transaction.findFirst({ where: { transactionId: id, outlet: { userId: ownerId(user) } }, include: { details: true } });
+  const row = await prisma.transaction.findFirst({
+    where: {
+      transactionId: id,
+      outlet: { userId: ownerId(user) },
+      ...(user.role === "kasir" ? { userId: user.userId } : {}),
+    },
+    include: { details: true },
+  });
   if (!row) throw new ApiError(404, "Transaksi tidak ditemukan");
   return { transaction: transactionDto(row), details: row.details.map(transactionDetailDto) };
 }
@@ -391,6 +432,19 @@ export async function createTransaction(user: SessionUser, input: { customerId?:
   const outletId = numericId(input.outletId, "outletId");
   const customerId = input.customerId ? numericId(input.customerId, "customerId") : undefined;
   const status = input.status ?? "Sukses";
+  const quantitiesByProduct = new Map<number, number>();
+
+  for (const item of input.items) {
+    const productId = numericId(item.productId, "productId");
+    quantitiesByProduct.set(productId, (quantitiesByProduct.get(productId) ?? 0) + item.quantity);
+  }
+
+  const normalizedItems = [...quantitiesByProduct.entries()].map(([productId, quantity]) => {
+    if (!Number.isInteger(quantity) || quantity <= 0) {
+      throw new ApiError(400, "Validasi gagal", { quantity: "Quantity harus lebih dari 0" });
+    }
+    return { productId, quantity };
+  });
 
   const row = await prisma.$transaction(async (tx) => {
     await ensureOutletAccess(outletId, user, tx);
@@ -402,20 +456,18 @@ export async function createTransaction(user: SessionUser, input: { customerId?:
     const detailInputs = [];
     let total = 0;
 
-    for (const item of input.items) {
-      const productId = numericId(item.productId, "productId");
-      const product = await tx.product.findFirst({ where: { productId, outlet: { userId: ownerId(user) } } });
-      if (!product) throw new ApiError(404, `Produk ${item.productId} tidak ditemukan`);
-      const inventory = await tx.inventory.findUnique({ where: { productId_outletId: { productId, outletId } } });
+    for (const item of normalizedItems) {
+      const product = await ensureProductOutletAccess(item.productId, outletId, user, tx);
+      const inventory = await tx.inventory.findUnique({ where: { productId_outletId: { productId: item.productId, outletId } } });
       if (!inventory) throw new ApiError(404, `Inventory produk ${item.productId} tidak ditemukan`);
       if (status === "Sukses" && inventory.stok < item.quantity) {
-        throw new ApiError(400, "Stok tidak mencukupi", { [String(productId)]: `Stok tersedia ${inventory.stok}` });
+        throw new ApiError(400, "Stok tidak mencukupi", { [String(item.productId)]: `Stok tersedia ${inventory.stok}` });
       }
 
       const unitPrice = Number(product.harga);
       const subtotal = unitPrice * item.quantity;
       total += subtotal;
-      detailInputs.push({ productId, quantity: item.quantity, unitPrice, subtotal, inventory });
+      detailInputs.push({ productId: item.productId, quantity: item.quantity, unitPrice, subtotal, inventory });
     }
 
     const transaction = await tx.transaction.create({
@@ -440,10 +492,14 @@ export async function createTransaction(user: SessionUser, input: { customerId?:
         },
       });
       if (status === "Sukses") {
-        const updated = await tx.inventory.update({
-          where: { inventoryId: item.inventory.inventoryId },
-          data: { stok: item.inventory.stok - item.quantity },
+        const result = await tx.inventory.updateMany({
+          where: { inventoryId: item.inventory.inventoryId, stok: { gte: item.quantity } },
+          data: { stok: { decrement: item.quantity } },
         });
+        if (result.count !== 1) {
+          throw new ApiError(400, "Stok tidak mencukupi", { [String(item.productId)]: "Stok berubah, silakan coba lagi" });
+        }
+        const updated = await tx.inventory.findUniqueOrThrow({ where: { inventoryId: item.inventory.inventoryId } });
         if (updated.stok <= updated.minStock) {
           await createLowStockNotification(tx, ownerId(user), item.productId, outletId, updated.stok);
         }
@@ -452,7 +508,7 @@ export async function createTransaction(user: SessionUser, input: { customerId?:
 
     await createAudit(tx, user.userId, "transactions", `Membuat transaksi ${transaction.transactionId}`, "transaction", String(transaction.transactionId));
     return transaction;
-  });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 
   return transactionDto(row);
 }
@@ -550,7 +606,7 @@ export async function listNotifications(user: SessionUser) {
 
 export async function createNotification(user: SessionUser, input: { userId?: string; pesan: string; tipe?: "activation" | "low_stock" | "renewal" | "system"; status?: "pending" | "sent" | "failed" }) {
   const targetUserId = input.userId ? numericId(input.userId, "userId") : ownerId(user);
-  if (targetUserId !== ownerId(user) && targetUserId !== user.userId) throw new ApiError(403, "Akses ditolak");
+  await ensureWorkspaceUserAccess(targetUserId, user);
   const row = await prisma.notificationLog.create({ data: { userId: targetUserId, pesan: input.pesan, tipe: input.tipe ?? "system", status: input.status ?? "sent" } });
   return notificationDto(row);
 }
@@ -575,6 +631,7 @@ export async function getAuditLog(user: SessionUser, id: number) {
 
 export async function createAuditLog(user: SessionUser, input: { userId?: string; aksi: string; module: string }) {
   const targetUserId = input.userId ? numericId(input.userId, "userId") : user.userId;
+  await ensureWorkspaceUserAccess(targetUserId, user);
   const row = await prisma.auditLog.create({ data: { userId: targetUserId, aksi: input.aksi, module: input.module } });
   return auditLogDto(row);
 }
