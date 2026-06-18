@@ -36,4 +36,15 @@ export const authService = {
   session() {
     return apiRequest<User>("/api/auth/session");
   },
+
+  profile() {
+    return apiRequest<User>("/api/users/me");
+  },
+
+  updateProfile(input: Pick<User, "nama" | "email">) {
+    return apiRequest<User>("/api/users/me", {
+      method: "PATCH",
+      body: jsonBody(input),
+    });
+  },
 };
