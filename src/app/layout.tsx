@@ -5,6 +5,10 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "POSmart",
   description: "Point of Sale Management System",
+  icons: {
+    icon: "/Logo.svg",
+    shortcut: "/Logo.svg",
+  },
 };
 
 export default function RootLayout({
