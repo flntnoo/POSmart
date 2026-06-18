@@ -185,12 +185,12 @@ export default function OutletsPage() {
             <form onSubmit={handleSubmit} className="mt-5 space-y-4">
               <div>
                 <label className="mb-1.5 block text-sm font-semibold text-gray-700">Nama outlet</label>
-                <input value={form.nama} onChange={(event) => setForm((prev) => ({ ...prev, nama: event.target.value }))} className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-orange-300" placeholder="Contoh: Kedai Kopi Senja" />
+                <input value={form.nama} onChange={(event) => setForm((prev) => ({ ...prev, nama: event.target.value }))} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-black caret-black placeholder:text-gray-400 outline-none focus:border-orange-300" placeholder="Contoh: Kedai Kopi Senja" />
                 {validation.nama && <p className="mt-1 text-xs font-semibold text-red-500">{validation.nama}</p>}
               </div>
               <div>
                 <label className="mb-1.5 block text-sm font-semibold text-gray-700">Alamat</label>
-                <textarea value={form.alamat} onChange={(event) => setForm((prev) => ({ ...prev, alamat: event.target.value }))} rows={4} className="w-full resize-none rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-orange-300" placeholder="Alamat outlet" />
+                <textarea value={form.alamat} onChange={(event) => setForm((prev) => ({ ...prev, alamat: event.target.value }))} rows={4} className="w-full resize-none rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-black caret-black placeholder:text-gray-400 outline-none focus:border-orange-300" placeholder="Alamat outlet" />
               </div>
               {validation.form && <p className="text-xs font-semibold text-red-500">{validation.form}</p>}
               <button type="submit" className="w-full rounded-xl bg-[#FF6B00] py-3 text-sm font-bold text-white hover:bg-[#E05E00]">

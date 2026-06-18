@@ -27,6 +27,14 @@ export type Outlet = {
   userId: string;
   nama: string;
   alamat?: string;
+  telepon?: string;
+  timezone: string;
+  currency: string;
+  taxRate: number;
+  printReceiptAuto: boolean;
+  lowStockAlert: boolean;
+  dailyWhatsappReport: boolean;
+  autoTax: boolean;
   createdAt: string;
   updatedAt: string;
 };

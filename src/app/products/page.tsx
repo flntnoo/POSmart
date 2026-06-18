@@ -12,7 +12,7 @@ import {
 import { categoryService, inventoryService, outletService, productService, supplierService } from "@/services";
 import { useSession } from "@/contexts/SessionContext";
 import type { Category, Inventory, Outlet, Product, Supplier } from "@/types/posmart";
-import { Search, Plus, Pencil, Trash2, Package, ChevronDown, X } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronDown, Loader2, Package, Pencil, Plus, Search, Trash2, X } from "lucide-react";
 
 type CategoryFilter = "Semua" | "Minuman" | "Makanan" | "Snack" | "Retail";
 type StatusFilter = "Semua" | "Aktif" | "Menipis" | "Habis";
@@ -63,6 +63,8 @@ const emptyForm: FormData = {
   name: "", sku: "", category: "", price: "", stock: "", description: "",
 };
 
+type FormErrors = Partial<Record<keyof FormData | "form" | "outlet", string>>;
+
 function formatPrice(p: number) {
   return "Rp " + p.toLocaleString("id-ID");
 }
@@ -82,6 +84,9 @@ export default function ProductsPage() {
   const [categories, setCategories]         = useState<Category[]>([]);
   const [outlets, setOutlets]               = useState<Outlet[]>([]);
   const [suppliers, setSuppliers]           = useState<Supplier[]>([]);
+  const [formErrors, setFormErrors]         = useState<FormErrors>({});
+  const [isSubmitting, setIsSubmitting]     = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
 
   useEffect(() => {
     let mounted = true;
@@ -139,6 +144,7 @@ export default function ProductsPage() {
     setShowForm(true);
     setEditingId(null);
     setForm(emptyForm);
+    setFormErrors({});
   }
 
   function openEdit(product: typeof products[0]) {
@@ -152,6 +158,7 @@ export default function ProductsPage() {
       stock: product.stock === null ? "" : String(product.stock),
       description: "",
     });
+    setFormErrors({});
   }
 
   function handleDelete(id: string) {
@@ -160,69 +167,114 @@ export default function ProductsPage() {
     });
   }
 
-  function handleSubmit(e: { preventDefault(): void }) {
+  function apiErrors(errors: Record<string, string> | undefined, fallback: string): FormErrors {
+    return {
+      ...(errors?.nama ? { name: errors.nama } : {}),
+      ...(errors?.sku ? { sku: errors.sku } : {}),
+      ...(errors?.categoryId ? { category: errors.categoryId } : {}),
+      ...(errors?.harga ? { price: errors.harga } : {}),
+      ...(errors?.outletId ? { outlet: errors.outletId } : {}),
+      form: errors?.request ?? fallback,
+    };
+  }
+
+  async function handleSubmit(e: { preventDefault(): void }) {
     e.preventDefault();
+    const price = Number(form.price);
+    const stock = Number(form.stock || 0);
+    const validation: FormErrors = {};
+
+    if (!form.name.trim()) validation.name = "Nama produk wajib diisi";
+    if (form.price === "" || !Number.isFinite(price) || price < 0) validation.price = "Harga harus berupa angka 0 atau lebih";
+    if (!Number.isInteger(stock) || stock < 0) validation.stock = "Stok harus berupa bilangan bulat 0 atau lebih";
+    if (!editingId && outlets.length === 0) validation.outlet = "Belum ada outlet. Tambahkan outlet terlebih dahulu sebelum membuat produk.";
+
+    if (Object.keys(validation).length > 0) {
+      setFormErrors(validation);
+      return;
+    }
+
+    setFormErrors({});
+    setSuccessMessage("");
+    setIsSubmitting(true);
+
     if (editingId) {
       const existingProduct = products.find(p => p.id === editingId);
       const categoryId = categories.find((category) => category.nama === form.category)?.categoryId ?? domainProducts.find((product) => product.productId === editingId)?.categoryId;
-      const price = parseInt(form.price) || existingProduct?.price || 0;
-      const stock = parseInt(form.stock);
-      void productService.update(editingId, {
-        nama: form.name || existingProduct?.name,
-        sku: form.sku || existingProduct?.sku,
+      const response = await productService.update(editingId, {
+        nama: form.name.trim() || existingProduct?.name,
+        sku: form.sku.trim() || existingProduct?.sku,
         harga: price,
         categoryId,
-      }).then((response) => {
-        if (!response.success || !response.data) return;
-        const existingInventory = inventory.find((item) => item.productId === editingId);
-        const inventoryUpdate = existingInventory && stock >= 0
-          ? inventoryService.adjust({ productId: editingId, outletId: existingInventory.outletId, quantity: stock, type: "set" })
-          : Promise.resolve(null);
-
-        inventoryUpdate.then((inventoryResponse) => {
-          const nextInventory = inventoryResponse?.success && inventoryResponse.data
-            ? inventory.map((item) => item.inventoryId === inventoryResponse.data!.inventoryId ? inventoryResponse.data! : item)
-            : inventory;
-          setInventory(nextInventory);
-          setDomainProducts((current) => current.map((item) => item.productId === editingId ? response.data! : item));
-          setProducts((current) => current.map((item) => item.id === editingId ? toProductView(response.data!, {
-            inventory: nextInventory,
-            categories,
-            suppliers,
-            outlets,
-          }) : item));
-        });
       });
+
+      if (!response.success || !response.data) {
+        setFormErrors(apiErrors(response.errors, response.message));
+        setIsSubmitting(false);
+        return;
+      }
+
+      const existingInventory = inventory.find((item) => item.productId === editingId);
+      const inventoryResponse = existingInventory
+        ? await inventoryService.adjust({ productId: editingId, outletId: existingInventory.outletId, quantity: stock, type: "set" })
+        : null;
+
+      if (inventoryResponse && (!inventoryResponse.success || !inventoryResponse.data)) {
+        setFormErrors({ form: `Data produk tersimpan, tetapi stok gagal diperbarui: ${inventoryResponse.message}` });
+        setIsSubmitting(false);
+        return;
+      }
+
+      const nextInventory = inventoryResponse?.data
+        ? inventory.map((item) => item.inventoryId === inventoryResponse.data!.inventoryId ? inventoryResponse.data! : item)
+        : inventory;
+      setInventory(nextInventory);
+      setDomainProducts((current) => current.map((item) => item.productId === editingId ? response.data! : item));
+      setProducts((current) => current.map((item) => item.id === editingId ? toProductView(response.data!, {
+        inventory: nextInventory,
+        categories,
+        suppliers,
+        outlets,
+      }) : item));
+      setSuccessMessage("Produk berhasil diperbarui.");
     } else {
       const selectedCategory = categories.find((category) => category.nama === form.category);
       const selectedOutlet = outlets[0];
-      const stock = parseInt(form.stock) || 0;
-      const price = parseInt(form.price) || 0;
-      void productService.create({
-        nama: form.name,
-        sku: form.sku || undefined,
+      const response = await productService.create({
+        nama: form.name.trim(),
+        sku: form.sku.trim() || undefined,
         harga: price,
         categoryId: selectedCategory?.categoryId,
         outletId: selectedOutlet?.outletId,
-      }).then((response) => {
-        if (!response.success || !response.data) return;
-        const inventoryCreate = selectedOutlet
-          ? inventoryService.create({ productId: response.data!.productId, outletId: selectedOutlet.outletId, stok: stock })
-          : Promise.resolve(null);
-        inventoryCreate.then((inventoryResponse) => {
-          const nextInventory = inventoryResponse?.success && inventoryResponse.data ? [inventoryResponse.data, ...inventory] : inventory;
-          const nextDomainProducts = [response.data!, ...domainProducts];
-          setInventory(nextInventory);
-          setDomainProducts(nextDomainProducts);
-          setProducts(nextDomainProducts.map((product) => toProductView(product, {
-            inventory: nextInventory,
-            categories,
-            suppliers,
-            outlets,
-          })));
-        });
       });
+
+      if (!response.success || !response.data) {
+        setFormErrors(apiErrors(response.errors, response.message));
+        setIsSubmitting(false);
+        return;
+      }
+
+      const inventoryResponse = await inventoryService.create({
+        productId: response.data.productId,
+        outletId: selectedOutlet.outletId,
+        stok: stock,
+      });
+      const nextInventory = inventoryResponse.success && inventoryResponse.data ? [inventoryResponse.data, ...inventory] : inventory;
+      const nextDomainProducts = [response.data, ...domainProducts];
+      setInventory(nextInventory);
+      setDomainProducts(nextDomainProducts);
+      setProducts(nextDomainProducts.map((product) => toProductView(product, {
+        inventory: nextInventory,
+        categories,
+        suppliers,
+        outlets,
+      })));
+      setSuccessMessage(inventoryResponse.success
+        ? "Produk berhasil ditambahkan."
+        : `Produk berhasil ditambahkan, tetapi stok awal gagal disimpan: ${inventoryResponse.message}`);
     }
+
+    setIsSubmitting(false);
     setShowForm(false);
     setEditingId(null);
     setForm(emptyForm);
@@ -232,10 +284,18 @@ export default function ProductsPage() {
     setShowForm(false);
     setEditingId(null);
     setForm(emptyForm);
+    setFormErrors({});
   }
 
   return (
     <DashboardLayout>
+      {successMessage && (
+        <div className="mb-4 flex items-center gap-2 rounded-xl border border-green-100 bg-green-50 px-4 py-3 text-sm font-semibold text-green-700">
+          <CheckCircle2 size={16} />
+          {successMessage}
+          <button onClick={() => setSuccessMessage("")} className="ml-auto text-green-500"><X size={14} /></button>
+        </div>
+      )}
       {/* Page header */}
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div>
@@ -511,6 +571,12 @@ export default function ProductsPage() {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4 p-5">
+              {(formErrors.form || formErrors.outlet) && (
+                <div className="flex items-start gap-2 rounded-xl border border-red-100 bg-red-50 px-3 py-2.5 text-xs font-medium leading-relaxed text-red-600">
+                  <AlertTriangle size={15} className="mt-0.5 shrink-0" />
+                  <span>{formErrors.outlet ?? formErrors.form}</span>
+                </div>
+              )}
               {/* Upload circle */}
               <div className="flex flex-col items-center pb-1">
                 <button type="button" className="relative">
@@ -534,6 +600,7 @@ export default function ProductsPage() {
                   onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                   className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm text-gray-700 placeholder:text-gray-400 outline-none focus:border-orange-300"
                 />
+                {formErrors.name && <p className="mt-1 text-xs text-red-500">{formErrors.name}</p>}
               </div>
 
               {/* SKU + Kategori */}
@@ -547,6 +614,7 @@ export default function ProductsPage() {
                     onChange={e => setForm(f => ({ ...f, sku: e.target.value }))}
                     className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm text-gray-700 placeholder:text-gray-400 outline-none focus:border-orange-300"
                   />
+                  {formErrors.sku && <p className="mt-1 text-xs text-red-500">{formErrors.sku}</p>}
                 </div>
                 <div>
                   <label className="mb-1.5 block text-xs font-semibold text-gray-600">Kategori</label>
@@ -564,6 +632,7 @@ export default function ProductsPage() {
                     </select>
                     <ChevronDown size={13} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
                   </div>
+                  {formErrors.category && <p className="mt-1 text-xs text-red-500">{formErrors.category}</p>}
                 </div>
               </div>
 
@@ -578,6 +647,7 @@ export default function ProductsPage() {
                     onChange={e => setForm(f => ({ ...f, price: e.target.value }))}
                     className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm text-gray-700 placeholder:text-gray-400 outline-none focus:border-orange-300"
                   />
+                  {formErrors.price && <p className="mt-1 text-xs text-red-500">{formErrors.price}</p>}
                 </div>
                 <div>
                   <label className="mb-1.5 block text-xs font-semibold text-gray-600">Stok Awal</label>
@@ -588,6 +658,7 @@ export default function ProductsPage() {
                     onChange={e => setForm(f => ({ ...f, stock: e.target.value }))}
                     className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm text-gray-700 placeholder:text-gray-400 outline-none focus:border-orange-300"
                   />
+                  {formErrors.stock && <p className="mt-1 text-xs text-red-500">{formErrors.stock}</p>}
                 </div>
               </div>
 
@@ -605,10 +676,11 @@ export default function ProductsPage() {
 
               <button
                 type="submit"
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#FF6B00] py-3 text-sm font-bold text-white transition-colors hover:bg-[#E05E00]"
+                disabled={isSubmitting}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#FF6B00] py-3 text-sm font-bold text-white transition-colors hover:bg-[#E05E00] disabled:cursor-not-allowed disabled:opacity-60"
               >
-                <Plus size={16} strokeWidth={2.5} />
-                {editingId ? "Simpan Perubahan" : "Simpan Produk"}
+                {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} strokeWidth={2.5} />}
+                {isSubmitting ? "Menyimpan..." : editingId ? "Simpan Perubahan" : "Simpan Produk"}
               </button>
               <button
                 type="button"

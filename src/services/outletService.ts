@@ -1,6 +1,8 @@
 import type { Outlet } from "@/types/posmart";
 import { apiListRequest, apiRequest, jsonBody, queryString } from "./api";
 
+type OutletInput = Omit<Outlet, "outletId" | "userId" | "createdAt" | "updatedAt">;
+
 export const outletService = {
   list(filters?: { userId?: string; page?: number; limit?: number }) {
     return apiListRequest<Outlet>(`/api/outlets${queryString(filters)}`);
@@ -10,14 +12,14 @@ export const outletService = {
     return apiRequest<Outlet>(`/api/outlets/${outletId}`);
   },
 
-  create(input: Pick<Outlet, "nama" | "alamat"> & { userId?: string }) {
+  create(input: Partial<OutletInput> & Pick<Outlet, "nama"> & { userId?: string }) {
     return apiRequest<Outlet>("/api/outlets", {
       method: "POST",
-      body: jsonBody({ nama: input.nama, alamat: input.alamat }),
+      body: jsonBody(input),
     });
   },
 
-  update(outletId: string, input: Partial<Pick<Outlet, "nama" | "alamat">>) {
+  update(outletId: string, input: Partial<OutletInput>) {
     return apiRequest<Outlet>(`/api/outlets/${outletId}`, {
       method: "PATCH",
       body: jsonBody(input),

@@ -255,13 +255,26 @@ export async function getOutlet(user: SessionUser, id: number) {
   return outletDto(await ensureOutletAccess(id, user));
 }
 
-export async function createOutlet(user: SessionUser, input: { nama: string; alamat?: string }) {
+type OutletInput = {
+  nama: string;
+  alamat?: string;
+  telepon?: string;
+  timezone?: string;
+  currency?: string;
+  taxRate?: number;
+  printReceiptAuto?: boolean;
+  lowStockAlert?: boolean;
+  dailyWhatsappReport?: boolean;
+  autoTax?: boolean;
+};
+
+export async function createOutlet(user: SessionUser, input: OutletInput) {
   const outlet = await prisma.outlet.create({ data: { userId: ownerId(user), nama: input.nama, alamat: input.alamat } });
   await createAudit(prisma, user.userId, "outlets", `Membuat outlet ${outlet.nama}`, "outlet", String(outlet.outletId));
   return outletDto(outlet);
 }
 
-export async function updateOutlet(user: SessionUser, id: number, input: { nama?: string; alamat?: string }) {
+export async function updateOutlet(user: SessionUser, id: number, input: Partial<OutletInput>) {
   await ensureOutletAccess(id, user);
   const outlet = await prisma.outlet.update({ where: { outletId: id }, data: input });
   await createAudit(prisma, user.userId, "outlets", `Memperbarui outlet ${outlet.nama}`, "outlet", String(outlet.outletId));

@@ -24,6 +24,14 @@ export const profileUpdateSchema = z.object({
 export const outletCreateSchema = z.object({
   nama: z.string().trim().min(1, "Nama outlet wajib diisi"),
   alamat: z.string().trim().optional(),
+  telepon: z.string().trim().max(30).optional(),
+  timezone: z.enum(["Asia/Jakarta", "Asia/Makassar", "Asia/Jayapura"]).optional(),
+  currency: z.enum(["IDR", "USD", "SGD"]).optional(),
+  taxRate: z.number().min(0).max(100).optional(),
+  printReceiptAuto: z.boolean().optional(),
+  lowStockAlert: z.boolean().optional(),
+  dailyWhatsappReport: z.boolean().optional(),
+  autoTax: z.boolean().optional(),
 });
 export const outletUpdateSchema = outletCreateSchema.partial();
 
