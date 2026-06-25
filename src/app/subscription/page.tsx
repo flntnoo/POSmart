@@ -7,7 +7,7 @@ import { EmptyState, ErrorState, LoadingState } from "@/components/ui/AppState";
 import { subscriptionService } from "@/services";
 import { useSession } from "@/contexts/SessionContext";
 import type { Subscription, SubscriptionPackage } from "@/types/posmart";
-import { Check, CreditCard, Info, Star, Zap } from "lucide-react";
+import { Check, CreditCard, Star, Zap } from "lucide-react";
 
 type Plan = {
   paket: SubscriptionPackage;

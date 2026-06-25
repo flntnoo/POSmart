@@ -7,7 +7,7 @@ import { EmptyState, ErrorState, LoadingState } from "@/components/ui/AppState";
 import { paymentService, subscriptionService } from "@/services";
 import { useSession } from "@/contexts/SessionContext";
 import type { Payment, Subscription } from "@/types/posmart";
-import { CheckCircle2, CreditCard, Info, RefreshCw } from "lucide-react";
+import { CheckCircle2, CreditCard, RefreshCw } from "lucide-react";
 
 function formatRp(value: number) {
   return "Rp " + value.toLocaleString("id-ID");
