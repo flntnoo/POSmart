@@ -1,3 +1,4 @@
+// Legacy demo-only component. The active /dashboard page does not import this module.
 import { AlertTriangle } from "lucide-react";
 import { lowStockData } from "@/data/dashboard";
 import { EmptyState } from "@/components/ui/AppState";

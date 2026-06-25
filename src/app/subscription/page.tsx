@@ -4,10 +4,10 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import DashboardLayout from "@/layouts/DashboardLayout";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/AppState";
-import { auditLogService, notificationService, paymentService, subscriptionService } from "@/services";
+import { subscriptionService } from "@/services";
 import { useSession } from "@/contexts/SessionContext";
 import type { Subscription, SubscriptionPackage } from "@/types/posmart";
-import { Check, CreditCard, Info, Star, Zap } from "lucide-react";
+import { Check, CreditCard, Star, Zap } from "lucide-react";
 
 type Plan = {
   paket: SubscriptionPackage;
@@ -86,7 +86,7 @@ export default function SubscriptionPage() {
     };
   }, [currentUser]);
 
-  async function handleSelectPackage(paket: SubscriptionPackage, price: number) {
+  async function handleSelectPackage(paket: SubscriptionPackage) {
     if (!currentUser) {
       setError("Session tidak ditemukan. Silakan login atau registrasi ulang.");
       return;
@@ -103,41 +103,13 @@ export default function SubscriptionPage() {
       return;
     }
 
-    const paymentResponse = await paymentService.create({
-      subscriptionId: subscriptionResponse.data.subscriptionId,
-      jumlah: price,
-      metode: paket === "Free" ? "Free Package" : "Midtrans Mock",
-      status: paket === "Free" ? "success" : "pending",
-    });
-
-    if (!paymentResponse.success) {
-      setError(paymentResponse.message);
-      setSelecting(null);
-      return;
-    }
-
-    if (paket === "Free") {
-      await subscriptionService.activate(subscriptionResponse.data.subscriptionId);
-    }
-
-    await auditLogService.create({
-      userId: currentUser.userId,
-      aksi: `Memilih paket ${paket}`,
-      module: "subscriptions",
-    });
-
-    await notificationService.create({
-      userId: currentUser.userId,
-      tipe: paket === "Free" ? "activation" : "system",
-      pesan: paket === "Free"
-        ? "Paket Free aktif. Anda dapat melanjutkan onboarding POSmart."
-        : `Payment paket ${paket} masih pending dalam mode mock.`,
-      status: paket === "Free" ? "sent" : "pending",
-    });
-
     setCurrentSubscription(subscriptionResponse.data);
-    setSuccess("Paket dipilih dan payment record mock dibuat. Mengarahkan ke status pembayaran...");
-    setTimeout(() => router.push("/payments"), 700);
+    setSuccess(
+      paket === "Free"
+        ? "Paket Free aktif. Mengarahkan ke onboarding..."
+        : `Paket ${paket} dipilih dan payment pending dibuat backend. Mengarahkan ke status pembayaran...`,
+    );
+    setTimeout(() => router.push(paket === "Free" ? "/onboarding" : "/payments"), 700);
   }
 
   return (
@@ -170,15 +142,10 @@ export default function SubscriptionPage() {
         </div>
       )}
 
-      <div className="mb-5 flex flex-wrap items-start gap-3 rounded-[20px] border border-blue-100 bg-blue-50 p-4 text-sm text-blue-700">
-        <Info size={17} className="mt-0.5 flex-shrink-0" />
-        <p>Midtrans belum diintegrasikan. Basic dan Pro membuat payment record berstatus pending dalam mode mock, lalu dapat disimulasikan sukses di halaman Payments.</p>
-      </div>
-
       {loading ? (
         <LoadingState title="Memuat paket..." />
       ) : plans.length === 0 ? (
-        <EmptyState title="Belum ada paket" description="Data paket subscription belum tersedia di mock service." />
+        <EmptyState title="Belum ada paket" description="Data paket subscription belum tersedia dari backend." />
       ) : (
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
           {plans.map((plan) => {
@@ -186,9 +153,8 @@ export default function SubscriptionPage() {
             return (
               <div
                 key={plan.paket}
-                className={`relative flex flex-col rounded-[20px] border-2 bg-white p-6 shadow-sm ${
-                  plan.recommended ? "border-[#FF6B00] shadow-orange-100" : "border-gray-100"
-                }`}
+                className={`relative flex flex-col rounded-[20px] border-2 bg-white p-6 shadow-sm ${plan.recommended ? "border-[#FF6B00] shadow-orange-100" : "border-gray-100"
+                  }`}
               >
                 {plan.recommended && (
                   <div className="absolute -top-3 left-1/2 -translate-x-1/2">
@@ -215,15 +181,14 @@ export default function SubscriptionPage() {
                 </div>
 
                 <button
-                  onClick={() => handleSelectPackage(plan.paket, plan.price)}
+                  onClick={() => handleSelectPackage(plan.paket)}
                   disabled={selecting !== null}
-                  className={`flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold transition-colors ${
-                    isCurrent
+                  className={`flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold transition-colors ${isCurrent
                       ? "bg-orange-100 text-orange-500"
                       : plan.recommended
                         ? "bg-[#FF6B00] text-white hover:bg-[#E05E00]"
                         : "border-2 border-gray-200 text-gray-700 hover:bg-gray-50"
-                  } disabled:cursor-not-allowed disabled:opacity-50`}
+                    } disabled:cursor-not-allowed disabled:opacity-50`}
                 >
                   {isCurrent ? <Star size={14} /> : plan.price === 0 ? <Zap size={14} /> : <CreditCard size={14} />}
                   {selecting === plan.paket ? "Menyimpan..." : isCurrent ? "Pilih Ulang Paket" : "Pilih Paket"}

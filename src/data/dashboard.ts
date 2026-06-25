@@ -1,3 +1,4 @@
+// Legacy demo-only data for dashboard components that are not imported by the active /dashboard page.
 import {
   mockCategories,
   mockCustomers,

@@ -31,7 +31,7 @@ function HeroSection() {
 
         {/* Nav links */}
         <div className="hidden items-center gap-8 md:flex">
-          {["Features", "Integrasi", "Pricing", "Contact"].map(n => (
+          {["Features", "Pricing", "Contact"].map(n => (
             <a
               key={n}
               href={`#${n.toLowerCase()}`}
@@ -128,12 +128,12 @@ function HeroSection() {
 
 // ── Features ──────────────────────────────────────────────────────────────────
 const FEATURES = [
-  { svg: "/LandingPage/PointofSale.svg",         title: "Point of Sale",        desc: "Kasir cepat, multi-metode bayar, struk otomatis",       bg: "bg-orange-50" },
-  { svg: "/LandingPage/InventoryManagement.svg",  title: "Inventory Management", desc: "Pantau stok real-time, alert stok menipis, laporan",     bg: "bg-blue-50"   },
-  { svg: "/LandingPage/CRM.svg",                  title: "CRM",                  desc: "Kelola pelanggan, riwayat pembelian, program loyalitas",  bg: "bg-green-50"  },
-  { svg: "/LandingPage/SupplierManagement.svg",   title: "Supplier Management",  desc: "Kelola supplier, purchase order, dan hutang piutang",    bg: "bg-purple-50" },
-  { svg: "/LandingPage/SalesAnalytics.svg",       title: "Sales Analytics",      desc: "Dashboard analitik lengkap dengan grafik interaktif",    bg: "bg-pink-50"   },
-  { svg: "/LandingPage/Real-TimeSync.svg",        title: "Real-time Sync",       desc: "Semua data tersinkron di semua perangkat secara instan",  bg: "bg-teal-50"   },
+  { svg: "/LandingPage/PointofSale.svg", title: "Point of Sale", desc: "Kasir cepat, multi-metode bayar, struk otomatis", bg: "bg-orange-50" },
+  { svg: "/LandingPage/InventoryManagement.svg", title: "Inventory Management", desc: "Pantau stok real-time, alert stok menipis, laporan", bg: "bg-blue-50" },
+  { svg: "/LandingPage/CRM.svg", title: "CRM", desc: "Kelola pelanggan, riwayat pembelian, program loyalitas", bg: "bg-green-50" },
+  { svg: "/LandingPage/SupplierManagement.svg", title: "Supplier Management", desc: "Kelola supplier, purchase order, dan hutang piutang", bg: "bg-purple-50" },
+  { svg: "/LandingPage/SalesAnalytics.svg", title: "Sales Analytics", desc: "Dashboard analitik lengkap dengan grafik interaktif", bg: "bg-pink-50" },
+  { svg: "/LandingPage/Real-TimeSync.svg", title: "Real-time Sync", desc: "Semua data tersinkron di semua perangkat secara instan", bg: "bg-teal-50" },
 ];
 
 function Features() {
@@ -161,69 +161,20 @@ function Features() {
   );
 }
 
-// ── Integrations ──────────────────────────────────────────────────────────────
-const INTEGRATIONS: { svg: string | null; abbr?: string; color?: string; name: string; desc: string; bg: string }[] = [
-  { svg: "/LandingPage/Midtrans.svg",  name: "Midtrans",          desc: "Payment Gateway",   bg: "bg-blue-50"   },
-  { svg: "/LandingPage/Cloudify.svg",  name: "Cloudinary",        desc: "Cloud Storage",     bg: "bg-indigo-50" },
-  { svg: "/LandingPage/Whatsapp.svg",  name: "WhatsApp Business", desc: "Notifikasi & Chat", bg: "bg-green-50"  },
-  { svg: null, abbr: "G", color: "#EA4335", name: "Google OAuth", desc: "Login SSO",         bg: "bg-red-50"    },
-];
-
-function Integrations() {
-  return (
-    <section id="integrasi" className="bg-gray-50 py-20">
-      <div className="mx-auto max-w-7xl px-6">
-        <div className="mb-12 text-center">
-          <h2 className="text-3xl font-extrabold text-gray-900">Integrasi Eksternal</h2>
-          <p className="mt-3 text-base text-gray-500">Terhubung dengan aplikasi dan layanan favorit Anda dengan mudah</p>
-        </div>
-        <div className="mb-6 grid grid-cols-4 gap-4">
-          {INTEGRATIONS.map(ig => (
-            <div key={ig.name}
-              className="flex flex-col items-center gap-3 rounded-2xl border border-gray-200 bg-white p-5 transition-all hover:border-orange-200 hover:shadow-sm">
-              <div className={`flex h-14 w-14 items-center justify-center rounded-2xl ${ig.bg}`}>
-                {ig.svg
-                  ? <Image src={ig.svg} alt={ig.name} width={36} height={36} />
-                  : <span className="text-lg font-extrabold" style={{ color: ig.color }}>{ig.abbr}</span>
-                }
-              </div>
-              <div className="text-center">
-                <p className="text-sm font-bold text-gray-900">{ig.name}</p>
-                <p className="text-xs text-gray-400">{ig.desc}</p>
-              </div>
-              <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-bold text-green-700">Tersedia</span>
-            </div>
-          ))}
-        </div>
-        <div className="flex items-center justify-between rounded-2xl border border-orange-200 bg-orange-50 px-8 py-6">
-          <div>
-            <p className="text-base font-bold text-gray-900">Integrasi siap dikembangkan</p>
-            <p className="mt-1 text-sm text-gray-500">Midtrans, WhatsApp, Google OAuth, dan Cloudinary disiapkan sebagai integrasi tahap berikutnya</p>
-          </div>
-          <Link href="/register"
-            className="flex items-center gap-2 rounded-xl bg-[#FF6B00] px-5 py-2.5 text-sm font-bold text-white transition-colors hover:bg-[#E05E00]">
-            Mulai Konfigurasi <ArrowRight size={14} />
-          </Link>
-        </div>
-      </div>
-    </section>
-  );
-}
-
 // ── Pricing ───────────────────────────────────────────────────────────────────
 const PLANS = [
   {
-    name: "Free",       priceLabel: "Gratis",    unit: "/bulan",
+    name: "Free", priceLabel: "Gratis", unit: "/bulan",
     features: ["1 Owner", "Data awal terbatas", "Payment record mock"],
     cta: "Pilih Paket", popular: false,
   },
   {
-    name: "Basic",      priceLabel: "Rp 299K",   unit: "/bulan",
+    name: "Basic", priceLabel: "Rp 299K", unit: "/bulan",
     features: ["Multi produk", "Inventory dasar", "Dashboard penjualan", "Payment record"],
     cta: "Pilih Paket", popular: true,
   },
   {
-    name: "Pro",        priceLabel: "Rp 599K",   unit: "/bulan",
+    name: "Pro", priceLabel: "Rp 599K", unit: "/bulan",
     features: ["Semua fitur Basic", "Multi outlet", "Analytics dasar", "Prioritas support"],
     cta: "Pilih Paket", popular: false,
   },
@@ -240,11 +191,10 @@ function Pricing() {
         <div className="mx-auto grid max-w-4xl grid-cols-3 gap-6">
           {PLANS.map(plan => (
             <div key={plan.name}
-              className={`relative flex flex-col rounded-2xl border-2 p-7 transition-all duration-300 ${
-                plan.popular
-                  ? "border-[#FF6B00] shadow-xl shadow-orange-100 scale-[1.05] z-10 bg-white"
-                  : "border-gray-200 bg-white hover:-translate-y-3 hover:border-[#FF6B00] hover:shadow-xl hover:shadow-orange-100"
-              }`}>
+              className={`relative flex flex-col rounded-2xl border-2 p-7 transition-all duration-300 ${plan.popular
+                ? "border-[#FF6B00] shadow-xl shadow-orange-100 scale-[1.05] z-10 bg-white"
+                : "border-gray-200 bg-white hover:-translate-y-3 hover:border-[#FF6B00] hover:shadow-xl hover:shadow-orange-100"
+                }`}>
               {plan.popular && (
                 <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
                   <span className="rounded-full bg-[#FF6B00] px-4 py-1 text-[11px] font-bold text-white">Rekomendasi</span>
@@ -265,11 +215,10 @@ function Pricing() {
                 ))}
               </div>
               <Link href="/register"
-                className={`block w-full rounded-xl py-3 text-center text-sm font-bold transition-colors ${
-                  plan.popular
-                    ? "bg-[#FF6B00] text-white hover:bg-[#E05E00]"
-                    : "border-2 border-gray-300 text-gray-700 hover:bg-gray-50"
-                }`}>
+                className={`block w-full rounded-xl py-3 text-center text-sm font-bold transition-colors ${plan.popular
+                  ? "bg-[#FF6B00] text-white hover:bg-[#E05E00]"
+                  : "border-2 border-gray-300 text-gray-700 hover:bg-gray-50"
+                  }`}>
                 <span className="flex items-center justify-center gap-1.5"><Zap size={13} /> {plan.cta}</span>
               </Link>
             </div>
@@ -330,9 +279,9 @@ function Footer() {
             </div>
           </div>
           {[
-            { title: "Produk",  links: ["Point of Sale", "Inventory", "CRM", "Analytics", "Integrasi"] },
+            { title: "Produk", links: ["Point of Sale", "Inventory", "CRM", "Analytics"] },
             { title: "Company", links: ["Tentang Kami", "Blog", "Karir", "Press Kit"] },
-            { title: "Legal",   links: ["Privasi", "Terms", "Cookie Policy"] },
+            { title: "Legal", links: ["Privasi", "Terms", "Cookie Policy"] },
           ].map(col => (
             <div key={col.title}>
               <p className="mb-3 text-xs font-bold uppercase tracking-widest text-gray-400">{col.title}</p>
@@ -358,7 +307,6 @@ export default function LandingPage() {
     <div className="min-h-screen bg-white font-sans">
       <HeroSection />
       <Features />
-      <Integrations />
       <Pricing />
       <CTASection />
       <Footer />

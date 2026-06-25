@@ -4,14 +4,14 @@ import { useEffect, useState } from "react";
 import DashboardLayout from "@/layouts/DashboardLayout";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/AppState";
-import { auditLogService, categoryService, productService } from "@/services";
+import { categoryService, productService } from "@/services";
 import { useSession } from "@/contexts/SessionContext";
 import type { Category, Product } from "@/types/posmart";
 import { CheckCircle2, FolderTree, Pencil, Plus, Trash2, X } from "lucide-react";
 
 export default function CategoriesPage() {
   const { currentUser } = useSession();
-  const currentUserId = currentUser?.userId ?? "user-owner-001";
+  const currentUserId = currentUser?.userId;
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -55,7 +55,6 @@ export default function CategoriesPage() {
     if (editing) {
       const response = await categoryService.update(editing.categoryId, { nama: name.trim() });
       if (response.success && response.data) {
-        await auditLogService.create({ userId: currentUserId, aksi: `Memperbarui kategori ${response.data.nama}`, module: "categories" });
         setCategories((prev) => prev.map((item) => item.categoryId === editing.categoryId ? response.data! : item));
         setSuccess("Kategori berhasil diperbarui.");
         setEditing(null);
@@ -68,7 +67,6 @@ export default function CategoriesPage() {
 
     const response = await categoryService.create({ nama: name.trim(), userId: currentUserId });
     if (response.success && response.data) {
-      await auditLogService.create({ userId: currentUserId, aksi: `Membuat kategori ${response.data.nama}`, module: "categories" });
       setCategories((prev) => prev.some((item) => item.categoryId === response.data!.categoryId) ? [...prev] : [response.data!, ...prev]);
       setSuccess("Kategori berhasil ditambahkan.");
       setName("");
@@ -77,16 +75,21 @@ export default function CategoriesPage() {
     }
   }
 
-  function confirmDelete() {
+  async function confirmDelete() {
     if (!deleteTarget) return;
     if (usedCount(deleteTarget.categoryId) > 0) {
       setValidation("Kategori masih digunakan produk. Pindahkan produk sebelum menghapus kategori.");
       setDeleteTarget(null);
       return;
     }
+    const response = await categoryService.remove(deleteTarget.categoryId);
+    if (!response.success) {
+      setValidation(response.errors?.categoryId ?? response.message);
+      setDeleteTarget(null);
+      return;
+    }
     setCategories((prev) => prev.filter((item) => item.categoryId !== deleteTarget.categoryId));
-    void auditLogService.create({ userId: currentUserId, aksi: `Menghapus kategori ${deleteTarget.nama}`, module: "categories" });
-    setSuccess("Kategori berhasil dihapus dari mock data.");
+    setSuccess("Kategori berhasil dihapus.");
     setDeleteTarget(null);
   }
 
@@ -173,7 +176,7 @@ export default function CategoriesPage() {
       <ConfirmDialog
         open={Boolean(deleteTarget)}
         title={usedCount(deleteTarget?.categoryId ?? "") > 0 ? "Kategori masih digunakan" : "Hapus kategori?"}
-        description={usedCount(deleteTarget?.categoryId ?? "") > 0 ? "Kategori ini masih dipakai produk. Sistem akan menolak penghapusan untuk menjaga relasi data." : `Kategori ${deleteTarget?.nama ?? ""} akan dihapus dari tampilan mock.`}
+        description={usedCount(deleteTarget?.categoryId ?? "") > 0 ? "Kategori ini masih dipakai produk. Sistem akan menolak penghapusan untuk menjaga relasi data." : `Kategori ${deleteTarget?.nama ?? ""} akan dihapus dari backend.`}
         confirmLabel={usedCount(deleteTarget?.categoryId ?? "") > 0 ? "Saya mengerti" : "Hapus"}
         onConfirm={confirmDelete}
         onCancel={() => setDeleteTarget(null)}

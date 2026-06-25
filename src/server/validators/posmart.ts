@@ -24,6 +24,14 @@ export const profileUpdateSchema = z.object({
 export const outletCreateSchema = z.object({
   nama: z.string().trim().min(1, "Nama outlet wajib diisi"),
   alamat: z.string().trim().optional(),
+  telepon: z.string().trim().max(30).optional(),
+  timezone: z.enum(["Asia/Jakarta", "Asia/Makassar", "Asia/Jayapura"]).optional(),
+  currency: z.enum(["IDR", "USD", "SGD"]).optional(),
+  taxRate: z.number().min(0).max(100).optional(),
+  printReceiptAuto: z.boolean().optional(),
+  lowStockAlert: z.boolean().optional(),
+  dailyWhatsappReport: z.boolean().optional(),
+  autoTax: z.boolean().optional(),
 });
 export const outletUpdateSchema = outletCreateSchema.partial();
 
@@ -39,7 +47,7 @@ export const supplierUpdateSchema = supplierCreateSchema.partial();
 export const productCreateSchema = z.object({
   categoryId: idStringSchema.optional(),
   supplierId: idStringSchema.optional(),
-  outletId: idStringSchema.optional(),
+  outletId: idStringSchema,
   nama: z.string().trim().min(1, "Nama produk wajib diisi"),
   harga: z.number().min(0, "Harga tidak boleh negatif"),
   sku: z.string().trim().optional(),
@@ -57,6 +65,14 @@ export const inventoryAdjustSchema = z.object({
   outletId: idStringSchema,
   quantity: z.number().int().min(0, "Jumlah stok tidak boleh negatif"),
   type: z.enum(["in", "out", "set"]),
+}).superRefine((input, ctx) => {
+  if ((input.type === "in" || input.type === "out") && input.quantity <= 0) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["quantity"],
+      message: "Quantity harus lebih dari 0",
+    });
+  }
 });
 
 export const customerCreateSchema = z.object({

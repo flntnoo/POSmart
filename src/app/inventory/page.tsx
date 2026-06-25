@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import DashboardLayout from "@/layouts/DashboardLayout";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/AppState";
-import { auditLogService, inventoryService, notificationService, outletService, productService } from "@/services";
+import { inventoryService, outletService, productService } from "@/services";
 import { useSession } from "@/contexts/SessionContext";
 import type { Inventory, Outlet, Product } from "@/types/posmart";
 import { AlertTriangle, Boxes, CheckCircle2, Search, X } from "lucide-react";
@@ -26,7 +26,7 @@ const emptyForm: AdjustmentForm = {
 
 export default function InventoryPage() {
   const { currentUser } = useSession();
-  const currentUserId = currentUser?.userId ?? "user-owner-001";
+  const currentUserId = currentUser?.userId;
   const [inventory, setInventory] = useState<Inventory[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [outlets, setOutlets] = useState<Outlet[]>([]);
@@ -99,23 +99,6 @@ export default function InventoryPage() {
     });
 
     if (response.success && response.data) {
-      const product = productById.get(response.data.productId);
-      const outlet = outletById.get(response.data.outletId);
-      await auditLogService.create({
-        userId: currentUserId,
-        aksi: `Menyesuaikan stok ${product?.nama ?? response.data.productId} menjadi ${response.data.stok}`,
-        module: "inventory",
-      });
-      if (response.data.stok <= response.data.minStock) {
-        await notificationService.createLowStock({
-          userId: currentUserId,
-          productId: response.data.productId,
-          outletId: response.data.outletId,
-          productName: product?.nama ?? response.data.productId,
-          outletName: outlet?.nama ?? "outlet aktif",
-          stock: response.data.stok,
-        });
-      }
       setInventory((prev) => prev.map((item) => item.inventoryId === response.data!.inventoryId ? response.data! : item));
       setSuccess("Stok berhasil disesuaikan.");
       setForm(emptyForm);

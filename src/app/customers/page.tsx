@@ -3,10 +3,10 @@
 import { useEffect, useState, useMemo } from "react";
 import DashboardLayout from "@/layouts/DashboardLayout";
 import {
-  formatRpShort, avatarColor, calcTier, toCustomerView,
+  formatRpShort, avatarColor, toCustomerView,
   type Customer, type CustomerTier,
 } from "@/data/customers";
-import { auditLogService, customerService, transactionService } from "@/services";
+import { customerService, transactionService } from "@/services";
 import { useSession } from "@/contexts/SessionContext";
 import {
   Search, UserPlus, X, Phone, Calendar,
@@ -24,12 +24,12 @@ const tierStyles: Record<CustomerTier, { pill: string; dot: string; icon: React.
   Member: { pill: "bg-green-50 text-green-600 border border-green-200",      dot: "bg-green-400",   icon: <Users  size={10} />, label: "Member"        },
 };
 
-type AddForm = { name: string; email: string; phone: string; purchases: string; qty: string; address: string };
-const emptyAdd: AddForm = { name: "", email: "", phone: "", purchases: "", qty: "", address: "" };
+type AddForm = { name: string; email: string; phone: string };
+const emptyAdd: AddForm = { name: "", email: "", phone: "" };
 
 export default function CustomersPage() {
   const { currentUser } = useSession();
-  const currentUserId = currentUser?.userId ?? "user-owner-001";
+  const currentUserId = currentUser?.userId;
   const [search, setSearch]   = useState("");
   const [tierFilter, setTier] = useState<TierFilter>("Semua");
   const [detail, setDetail]   = useState<Customer | null>(null);
@@ -56,42 +56,16 @@ export default function CustomersPage() {
 
   function handleAddSubmit(e: { preventDefault(): void }) {
     e.preventDefault();
-    const spent   = parseInt(addForm.purchases) || 0;
-    const txCount = parseInt(addForm.qty)        || 0;
-    const d = new Date();
-    const months = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"];
-    const today = `${String(d.getDate()).padStart(2,"0")} ${months[d.getMonth()]} ${d.getFullYear()}`;
-    const newCustomer: Customer = {
-      id:                `C-${String(customers.length + 1).padStart(3, "0")}`,
-      name:              addForm.name,
-      phone:             addForm.phone,
-      email:             addForm.email,
-      totalTransactions: txCount,
-      totalSpent:        spent,
-      lastTransaction:   today,
-      joinDate:          today,
-      visits:            txCount,
-      status:            txCount > 1 ? "Aktif" : "Tidak Aktif",
-      tier:              calcTier(spent, txCount),
-      recentItems:       [],
-      recentTx:          [],
-    };
     customerService.create({
       userId: currentUserId,
-      nama: newCustomer.name,
-      email: newCustomer.email,
-      telepon: newCustomer.phone,
+      nama: addForm.name,
+      email: addForm.email || undefined,
+      telepon: addForm.phone || undefined,
     }).then((response) => {
       if (response.success && response.data) {
-        setCustomers(prev => [toCustomerView(response.data, []), ...prev]);
-      } else {
-        setCustomers(prev => [newCustomer, ...prev]);
+        const createdCustomer = response.data;
+        setCustomers(prev => [toCustomerView(createdCustomer, []), ...prev]);
       }
-    });
-    void auditLogService.create({
-      userId: currentUserId,
-      aksi: `Membuat pelanggan ${newCustomer.name}`,
-      module: "customers",
     });
     setAddForm(emptyAdd);
     setShowAdd(false);
@@ -164,26 +138,6 @@ export default function CustomersPage() {
                   onChange={e => setAddForm(f => ({ ...f, phone: e.target.value }))}
                   className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900 placeholder:text-gray-300 outline-none focus:border-orange-300" />
               </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="mb-1.5 block text-sm font-semibold text-gray-700">Total Belanja (Rp)</label>
-                <input type="number" placeholder="contoh: 5000000" value={addForm.purchases}
-                  onChange={e => setAddForm(f => ({ ...f, purchases: e.target.value }))}
-                  className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900 placeholder:text-gray-300 outline-none focus:border-orange-300" />
-              </div>
-              <div>
-                <label className="mb-1.5 block text-sm font-semibold text-gray-700">Jumlah Pesanan</label>
-                <input type="number" placeholder="contoh: 3" value={addForm.qty}
-                  onChange={e => setAddForm(f => ({ ...f, qty: e.target.value }))}
-                  className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900 placeholder:text-gray-300 outline-none focus:border-orange-300" />
-              </div>
-            </div>
-            <div>
-              <label className="mb-1.5 block text-sm font-semibold text-gray-700">Address</label>
-              <textarea rows={4} placeholder="Input address" value={addForm.address}
-                onChange={e => setAddForm(f => ({ ...f, address: e.target.value }))}
-                className="w-full resize-none rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900 placeholder:text-gray-300 outline-none focus:border-orange-300" />
             </div>
             <button type="submit"
               className="w-full rounded-xl bg-[#FF6B00] py-3.5 text-sm font-bold text-white transition-colors hover:bg-[#E05E00]">
@@ -435,9 +389,9 @@ export default function CustomersPage() {
               <div className="px-5">
                 <p className="mb-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">Riwayat Transaksi</p>
                 <div className="space-y-3">
-                  {detail.recentTx.map((tx, i) => {
+                  {detail.recentTx.map((tx) => {
                     return (
-                      <div key={i} className="flex items-center gap-2.5">
+                      <div key={tx.name} className="flex items-center gap-2.5">
                         <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-orange-50 text-[10px] font-bold text-orange-500">
                           {tx.name.slice(0, 2).toUpperCase()}
                         </div>
@@ -451,6 +405,11 @@ export default function CustomersPage() {
                       </div>
                     );
                   })}
+                  {detail.recentTx.length === 0 && (
+                    <p className="rounded-xl bg-gray-50 px-3 py-4 text-center text-xs text-gray-400">
+                      Belum ada transaksi
+                    </p>
+                  )}
                 </div>
               </div>
 

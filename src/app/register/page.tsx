@@ -5,7 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { CheckCircle2, Eye, EyeOff } from "lucide-react";
-import { auditLogService, authService } from "@/services";
+import { authService } from "@/services";
 import { useSession } from "@/contexts/SessionContext";
 
 type RegisterForm = {
@@ -63,12 +63,6 @@ export default function RegisterPage() {
       setLoading(false);
       return;
     }
-
-    await auditLogService.create({
-      userId: response.data.userId,
-      aksi: "Registrasi akun owner baru",
-      module: "auth",
-    });
 
     setSessionUser(response.data);
     setSuccess("Registrasi berhasil. Mengarahkan ke pemilihan paket...");
@@ -129,9 +123,8 @@ export default function RegisterPage() {
                 value={form.nama}
                 onChange={(event) => setForm((current) => ({ ...current, nama: event.target.value }))}
                 placeholder="Nama lengkap Anda"
-                className={`w-full rounded-xl border bg-white px-4 py-3 text-sm text-gray-900 placeholder:text-gray-400 outline-none transition-all focus:border-orange-400 focus:ring-2 focus:ring-orange-100 ${
-                  errors.nama ? "border-red-300" : "border-gray-200"
-                }`}
+                className={`w-full rounded-xl border bg-white px-4 py-3 text-sm text-gray-900 placeholder:text-gray-400 outline-none transition-all focus:border-orange-400 focus:ring-2 focus:ring-orange-100 ${errors.nama ? "border-red-300" : "border-gray-200"
+                  }`}
               />
               {errors.nama && <p className="mt-1 text-xs font-semibold text-red-500">{errors.nama}</p>}
             </div>
@@ -143,9 +136,8 @@ export default function RegisterPage() {
                 value={form.email}
                 onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))}
                 placeholder="nama@email.com"
-                className={`w-full rounded-xl border bg-white px-4 py-3 text-sm text-gray-900 placeholder:text-gray-400 outline-none transition-all focus:border-orange-400 focus:ring-2 focus:ring-orange-100 ${
-                  errors.email ? "border-red-300" : "border-gray-200"
-                }`}
+                className={`w-full rounded-xl border bg-white px-4 py-3 text-sm text-gray-900 placeholder:text-gray-400 outline-none transition-all focus:border-orange-400 focus:ring-2 focus:ring-orange-100 ${errors.email ? "border-red-300" : "border-gray-200"
+                  }`}
               />
               {errors.email && <p className="mt-1 text-xs font-semibold text-red-500">{errors.email}</p>}
             </div>
@@ -158,9 +150,8 @@ export default function RegisterPage() {
                   value={form.password}
                   onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))}
                   placeholder="Password akun"
-                  className={`w-full rounded-xl border bg-white px-4 py-3 pr-11 text-sm text-gray-900 placeholder:text-gray-400 outline-none transition-all focus:border-orange-400 focus:ring-2 focus:ring-orange-100 ${
-                    errors.password ? "border-red-300" : "border-gray-200"
-                  }`}
+                  className={`w-full rounded-xl border bg-white px-4 py-3 pr-11 text-sm text-gray-900 placeholder:text-gray-400 outline-none transition-all focus:border-orange-400 focus:ring-2 focus:ring-orange-100 ${errors.password ? "border-red-300" : "border-gray-200"
+                    }`}
                 />
                 <button
                   type="button"
@@ -171,10 +162,6 @@ export default function RegisterPage() {
                 </button>
               </div>
               {errors.password && <p className="mt-1 text-xs font-semibold text-red-500">{errors.password}</p>}
-            </div>
-
-            <div className="rounded-xl border border-orange-100 bg-orange-50 px-4 py-3 text-sm text-orange-700">
-              Role awal diset otomatis sebagai <span className="font-bold">Owner</span>. Role admin dan kasir dapat dikelola setelah akun aktif.
             </div>
 
             <button

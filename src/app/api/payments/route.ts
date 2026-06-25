@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { created, handleApiError, ok } from "@/lib/api-response";
 import { requireAuth } from "@/lib/auth";
 import { canManageSubscription, requireRole } from "@/lib/rbac-server";
-import { createPayment, listPayments } from "@/server/services/posmart";
+import { createPayment, listPaymentsWithFilters } from "@/server/services/posmart";
 import { paymentCreateSchema } from "@/server/validators/posmart";
 
 export const runtime = "nodejs";
@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
   try {
     const user = await requireAuth(request);
     requireRole(user, ["owner", "admin"]);
-    return ok("Riwayat pembayaran berhasil diambil", await listPayments(user, request.nextUrl.searchParams.get("subscriptionId") ?? undefined));
+    return ok("Riwayat pembayaran berhasil diambil", await listPaymentsWithFilters(user, request.nextUrl.searchParams));
   } catch (error) {
     return handleApiError(error);
   }

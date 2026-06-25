@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import DashboardLayout from "@/layouts/DashboardLayout";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/AppState";
 import { auditLogService } from "@/services";
-import { getWorkspaceUserIds, mockUsers } from "@/data/mockData";
 import { useSession } from "@/contexts/SessionContext";
 import type { AuditLog } from "@/types/posmart";
 import { ClipboardList } from "lucide-react";
@@ -31,9 +30,7 @@ export default function AuditLogsPage() {
   }, [currentUser?.userId]);
 
   const modules = useMemo(() => [...new Set(logs.map((log) => log.module))], [logs]);
-  const workspaceUserIds = useMemo(() => getWorkspaceUserIds(currentUser?.userId), [currentUser?.userId]);
-  const users = useMemo(() => mockUsers.filter((user) => !workspaceUserIds || workspaceUserIds.has(user.userId)), [workspaceUserIds]);
-  const userById = useMemo(() => new Map(users.map((user) => [user.userId, user])), [users]);
+  const users = useMemo(() => [...new Set(logs.map((log) => log.userId))], [logs]);
   const filteredLogs = useMemo(() => logs.filter((log) => {
     if (userFilter !== "all" && log.userId !== userFilter) return false;
     if (moduleFilter !== "all" && log.module !== moduleFilter) return false;
@@ -52,7 +49,7 @@ export default function AuditLogsPage() {
       <div className="mb-4 flex items-center gap-3">
         <select value={userFilter} onChange={(event) => setUserFilter(event.target.value)} className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-600 outline-none">
           <option value="all">Semua user</option>
-          {users.map((user) => <option key={user.userId} value={user.userId}>{user.nama}</option>)}
+          {users.map((userId) => <option key={userId} value={userId}>{userId === currentUser?.userId ? currentUser.nama : `User ${userId}`}</option>)}
         </select>
         <select value={moduleFilter} onChange={(event) => setModuleFilter(event.target.value)} className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-600 outline-none">
           <option value="all">Semua modul</option>
@@ -82,8 +79,8 @@ export default function AuditLogsPage() {
                       <div className="flex items-center gap-3">
                         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-50 text-[#FF6B00]"><ClipboardList size={18} /></div>
                         <div>
-                          <p className="font-semibold text-gray-800">{userById.get(log.userId)?.nama ?? log.userId}</p>
-                          <p className="text-xs text-gray-400">{userById.get(log.userId)?.role ?? "-"}</p>
+                          <p className="font-semibold text-gray-800">{log.userId === currentUser?.userId ? currentUser.nama : `User ${log.userId}`}</p>
+                          <p className="text-xs text-gray-400">{log.userId === currentUser?.userId ? currentUser.role : "workspace user"}</p>
                         </div>
                       </div>
                     </td>

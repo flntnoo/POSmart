@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import DashboardLayout from "@/layouts/DashboardLayout";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/AppState";
-import { auditLogService, outletService } from "@/services";
+import { outletService } from "@/services";
 import { useSession } from "@/contexts/SessionContext";
 import type { Outlet } from "@/types/posmart";
 import { CheckCircle2, Pencil, Plus, Store, Trash2, X } from "lucide-react";
@@ -18,7 +18,7 @@ const emptyForm: OutletForm = { nama: "", alamat: "" };
 
 export default function OutletsPage() {
   const { currentUser } = useSession();
-  const currentUserId = currentUser?.userId ?? "user-owner-001";
+  const currentUserId = currentUser?.userId;
   const [outlets, setOutlets] = useState<Outlet[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -68,7 +68,6 @@ export default function OutletsPage() {
     if (editing) {
       const response = await outletService.update(editing.outletId, form);
       if (response.success && response.data) {
-        await auditLogService.create({ userId: currentUserId, aksi: `Memperbarui outlet ${response.data.nama}`, module: "outlets" });
         setOutlets((prev) => prev.map((item) => item.outletId === editing.outletId ? response.data! : item));
         setSuccess("Outlet berhasil diperbarui.");
         setEditing(null);
@@ -81,7 +80,6 @@ export default function OutletsPage() {
 
     const response = await outletService.create({ userId: currentUserId, nama: form.nama, alamat: form.alamat });
     if (response.success && response.data) {
-      await auditLogService.create({ userId: currentUserId, aksi: `Membuat outlet ${response.data.nama}`, module: "outlets" });
       setOutlets((prev) => prev.some((item) => item.outletId === response.data!.outletId) ? [...prev] : [response.data!, ...prev]);
       setActiveOutletId((current) => current || response.data!.outletId);
       setSuccess("Outlet berhasil ditambahkan.");
@@ -91,15 +89,20 @@ export default function OutletsPage() {
     }
   }
 
-  function confirmDelete() {
+  async function confirmDelete() {
     if (!deleteTarget) return;
+    const response = await outletService.remove(deleteTarget.outletId);
+    if (!response.success) {
+      setValidation(response.errors ?? { form: response.message });
+      setDeleteTarget(null);
+      return;
+    }
     setOutlets((prev) => prev.filter((item) => item.outletId !== deleteTarget.outletId));
-    void auditLogService.create({ userId: currentUserId, aksi: `Menghapus outlet ${deleteTarget.nama}`, module: "outlets" });
     if (activeOutletId === deleteTarget.outletId) {
       const nextOutlet = outlets.find((item) => item.outletId !== deleteTarget.outletId);
       setActiveOutletId(nextOutlet?.outletId ?? "");
     }
-    setSuccess("Outlet berhasil dihapus dari mock data.");
+    setSuccess("Outlet berhasil dihapus.");
     setDeleteTarget(null);
   }
 
@@ -182,12 +185,12 @@ export default function OutletsPage() {
             <form onSubmit={handleSubmit} className="mt-5 space-y-4">
               <div>
                 <label className="mb-1.5 block text-sm font-semibold text-gray-700">Nama outlet</label>
-                <input value={form.nama} onChange={(event) => setForm((prev) => ({ ...prev, nama: event.target.value }))} className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-orange-300" placeholder="Contoh: Kedai Kopi Senja" />
+                <input value={form.nama} onChange={(event) => setForm((prev) => ({ ...prev, nama: event.target.value }))} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-black caret-black placeholder:text-gray-400 outline-none focus:border-orange-300" placeholder="Contoh: Kedai Kopi Senja" />
                 {validation.nama && <p className="mt-1 text-xs font-semibold text-red-500">{validation.nama}</p>}
               </div>
               <div>
                 <label className="mb-1.5 block text-sm font-semibold text-gray-700">Alamat</label>
-                <textarea value={form.alamat} onChange={(event) => setForm((prev) => ({ ...prev, alamat: event.target.value }))} rows={4} className="w-full resize-none rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-orange-300" placeholder="Alamat outlet" />
+                <textarea value={form.alamat} onChange={(event) => setForm((prev) => ({ ...prev, alamat: event.target.value }))} rows={4} className="w-full resize-none rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-black caret-black placeholder:text-gray-400 outline-none focus:border-orange-300" placeholder="Alamat outlet" />
               </div>
               {validation.form && <p className="text-xs font-semibold text-red-500">{validation.form}</p>}
               <button type="submit" className="w-full rounded-xl bg-[#FF6B00] py-3 text-sm font-bold text-white hover:bg-[#E05E00]">
@@ -202,7 +205,7 @@ export default function OutletsPage() {
       <ConfirmDialog
         open={Boolean(deleteTarget)}
         title="Hapus outlet?"
-        description={`Outlet ${deleteTarget?.nama ?? ""} akan dihapus dari tampilan mock. Data backend belum berubah.`}
+        description={`Outlet ${deleteTarget?.nama ?? ""} akan dihapus dari backend jika tidak memiliki transaksi terkait.`}
         confirmLabel="Hapus"
         onConfirm={confirmDelete}
         onCancel={() => setDeleteTarget(null)}

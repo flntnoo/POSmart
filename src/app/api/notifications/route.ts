@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { created, handleApiError, ok } from "@/lib/api-response";
 import { requireAuth } from "@/lib/auth";
-import { requireRole } from "@/lib/rbac-server";
+import { canReadNotifications, requireRole } from "@/lib/rbac-server";
 import { createNotification, listNotifications } from "@/server/services/posmart";
 import { notificationCreateSchema } from "@/server/validators/posmart";
 
@@ -10,7 +10,8 @@ export const runtime = "nodejs";
 export async function GET(request: NextRequest) {
   try {
     const user = await requireAuth(request);
-    return ok("Notification log berhasil diambil", await listNotifications(user));
+    canReadNotifications(user);
+    return ok("Notification log berhasil diambil", await listNotifications(user, request.nextUrl.searchParams));
   } catch (error) {
     return handleApiError(error);
   }

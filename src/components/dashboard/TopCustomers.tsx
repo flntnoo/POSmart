@@ -1,3 +1,4 @@
+// Legacy demo-only component. The active /dashboard page does not import this module.
 import { Crown } from "lucide-react";
 import { topCustomersData } from "@/data/dashboard";
 

@@ -6,13 +6,40 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
 import { useSession } from "@/contexts/SessionContext";
+import { authService } from "@/services";
+import type { UserRole } from "@/types/posmart";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { loginMock } = useSession();
+  const { setSessionUser } = useSession();
   const [activeTab, setActiveTab] = useState<"owner" | "karyawan">("owner");
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
+  const [ownerEmail, setOwnerEmail] = useState("owner@posmart.test");
+  const [ownerPassword, setOwnerPassword] = useState("password123");
+  const [employeeEmail, setEmployeeEmail] = useState("kasir@posmart.test");
+  const [employeePassword, setEmployeePassword] = useState("password123");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  async function handleLogin(role: UserRole) {
+    setLoading(true);
+    setError("");
+    const response = await authService.login({
+      email: role === "owner" ? ownerEmail : employeeEmail,
+      password: role === "owner" ? ownerPassword : employeePassword,
+      role,
+    });
+    setLoading(false);
+
+    if (!response.success || !response.data) {
+      setError(response.message);
+      return;
+    }
+
+    setSessionUser(response.data);
+    router.push(role === "kasir" ? "/pos" : "/dashboard");
+  }
 
   return (
     <div className="flex min-h-screen">
@@ -63,6 +90,12 @@ export default function LoginPage() {
             </p>
           </div>
 
+          {error && (
+            <div className="mb-4 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-semibold text-red-600">
+              {error}
+            </div>
+          )}
+
           {/* Tab toggle */}
           <div className="mb-6 flex gap-1.5 rounded-xl bg-gray-100 p-1">
             <button
@@ -96,6 +129,8 @@ export default function LoginPage() {
                 </label>
                 <input
                   type="email"
+                  value={ownerEmail}
+                  onChange={(event) => setOwnerEmail(event.target.value)}
                   placeholder="Masukkan email"
                   className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 placeholder:text-gray-400 outline-none transition-all focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
                 />
@@ -108,6 +143,8 @@ export default function LoginPage() {
                 <div className="relative">
                   <input
                     type={showPassword ? "text" : "password"}
+                    value={ownerPassword}
+                    onChange={(event) => setOwnerPassword(event.target.value)}
                     placeholder="Masukkan password"
                     className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 pr-11 text-sm text-gray-900 placeholder:text-gray-400 outline-none transition-all focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
                   />
@@ -140,9 +177,10 @@ export default function LoginPage() {
               </div>
 
               <button
-                onClick={() => { loginMock("owner"); router.push("/dashboard"); }}
+                onClick={() => void handleLogin("owner")}
+                disabled={loading}
                 className="mt-2 w-full rounded-xl bg-[#FF6B00] py-3.5 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:bg-[#e85f00] active:scale-[0.99]">
-                Masuk sebagai Owner
+                {loading ? "Memproses..." : "Masuk sebagai Owner"}
               </button>
             </div>
           )}
@@ -150,33 +188,17 @@ export default function LoginPage() {
           {/* Karyawan Form */}
           {activeTab === "karyawan" && (
             <div className="space-y-4">
-              {/* Info box */}
-              <div className="flex gap-3 rounded-xl border border-orange-100 bg-orange-50 p-3.5">
-                <div className="mt-0.5 flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full bg-orange-400">
-                  <span className="text-[10px] font-bold text-white">i</span>
-                </div>
-                <div>
-                  <p className="text-xs font-semibold text-orange-700">
-                    Akses Karyawan
-                  </p>
-                  <p className="mt-0.5 text-xs leading-relaxed text-orange-600">
-                    Karyawan hanya dapat mengakses POS, transaksi, dan data pelanggan.
-                  </p>
-                </div>
-              </div>
-
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-gray-700">
-                  Kode Toko
+                  Email Karyawan
                 </label>
                 <input
-                  type="text"
-                  placeholder="Contoh: POSMART-001"
+                  type="email"
+                  value={employeeEmail}
+                  onChange={(event) => setEmployeeEmail(event.target.value)}
+                  placeholder="kasir@posmart.test"
                   className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 placeholder:text-gray-400 outline-none transition-all focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
                 />
-                <p className="mt-1.5 pl-0.5 text-xs text-gray-400">
-                  Minta kode toko kepada owner Anda
-                </p>
               </div>
 
               <div>
@@ -186,6 +208,8 @@ export default function LoginPage() {
                 <div className="relative">
                   <input
                     type={showPassword ? "text" : "password"}
+                    value={employeePassword}
+                    onChange={(event) => setEmployeePassword(event.target.value)}
                     placeholder="Masukkan password karyawan"
                     className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 pr-11 text-sm text-gray-900 placeholder:text-gray-400 outline-none transition-all focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
                   />
@@ -200,10 +224,11 @@ export default function LoginPage() {
               </div>
 
               <button
-                onClick={() => { loginMock("kasir"); router.push("/pos"); }}
+                onClick={() => void handleLogin("kasir")}
+                disabled={loading}
                 className="mt-2 w-full rounded-xl bg-slate-800 py-3.5 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:bg-slate-700 active:scale-[0.99]"
               >
-                Masuk sebagai Karyawan
+                {loading ? "Memproses..." : "Masuk sebagai Karyawan"}
               </button>
             </div>
           )}

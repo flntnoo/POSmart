@@ -44,12 +44,20 @@ export function userDto(input: {
   };
 }
 
-export function outletDto(input: { outletId: number; userId: number; nama: string; alamat: string | null; createdAt: Date; updatedAt: Date }): Outlet {
+export function outletDto(input: { outletId: number; userId: number; nama: string; alamat: string | null; telepon: string | null; timezone: string; currency: string; taxRate: unknown; printReceiptAuto: boolean; lowStockAlert: boolean; dailyWhatsappReport: boolean; autoTax: boolean; createdAt: Date; updatedAt: Date }): Outlet {
   return {
     outletId: id(input.outletId),
     userId: id(input.userId),
     nama: input.nama,
     alamat: input.alamat ?? undefined,
+    telepon: input.telepon ?? undefined,
+    timezone: input.timezone,
+    currency: input.currency,
+    taxRate: Number(input.taxRate),
+    printReceiptAuto: input.printReceiptAuto,
+    lowStockAlert: input.lowStockAlert,
+    dailyWhatsappReport: input.dailyWhatsappReport,
+    autoTax: input.autoTax,
     createdAt: iso(input.createdAt),
     updatedAt: iso(input.updatedAt),
   };

@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import DashboardLayout from "@/layouts/DashboardLayout";
+import { useSession } from "@/contexts/SessionContext";
+import { outletService } from "@/services";
 import {
   ChevronRight, Store, User, Bell, Shield,
-  Globe, CreditCard, ExternalLink, CheckCircle2,
-  Circle, Printer, Package, MessageSquare, Receipt,
-  Save,
+  Globe, CreditCard, Printer, Package, MessageSquare,
+  Receipt, Save, Loader2, CheckCircle2, AlertTriangle,
 } from "lucide-react";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -18,17 +19,6 @@ type SettingItem = {
   desc: string;
 };
 
-type Integration = {
-  id: string;
-  name: string;
-  desc: string;
-  abbr: string;
-  color: string;
-  textColor: string;
-  badge?: string;
-  badgeColor?: string;
-  connected: boolean;
-};
 
 // ── Data ───────────────────────────────────────────────────────────────────────
 
@@ -71,54 +61,22 @@ const settingItems: SettingItem[] = [
   },
 ];
 
-const defaultIntegrations: Integration[] = [
-  {
-    id: "midtrans", name: "Midtrans", desc: "Payment Gateway Indonesia",
-    abbr: "MT", color: "#1E3A8A", textColor: "#FFFFFF",
-    badge: "Future", badgeColor: "bg-blue-100 text-blue-700",
-    connected: true,
-  },
-  {
-    id: "whatsapp", name: "WhatsApp Business", desc: "Notifikasi & pesan otomatis",
-    abbr: "WA", color: "#16A34A", textColor: "#FFFFFF",
-    connected: true,
-  },
-  {
-    id: "cloudinary", name: "Cloudinary", desc: "Cloud storage untuk gambar",
-    abbr: "CL", color: "#6366F1", textColor: "#FFFFFF",
-    connected: false,
-  },
-  {
-    id: "google", name: "Google OAuth", desc: "Login dengan akun Google",
-    abbr: "G", color: "#EA4335", textColor: "#FFFFFF",
-    connected: true,
-  },
-  {
-    id: "tokopedia", name: "Tokopedia", desc: "Sync produk & pesanan",
-    abbr: "TK", color: "#00AA5B", textColor: "#FFFFFF",
-    badge: "Pro", badgeColor: "bg-green-100 text-green-700",
-    connected: false,
-  },
-  {
-    id: "gopay", name: "GoPay / OVO", desc: "Dompet digital/e-wallet",
-    abbr: "$", color: "#F59E0B", textColor: "#FFFFFF",
-    connected: false,
-  },
-];
-
 // ── Toggle component ───────────────────────────────────────────────────────────
 
 function Toggle({ on, onToggle }: { on: boolean; onToggle: () => void }) {
   return (
     <button
+      type="button"
+      role="switch"
+      aria-checked={on}
       onClick={onToggle}
       className={`relative h-5 w-9 flex-shrink-0 rounded-full transition-colors duration-200 ${
         on ? "bg-[#FF6B00]" : "bg-gray-200"
       }`}
     >
       <span
-        className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${
-          on ? "translate-x-4" : "translate-x-0.5"
+        className={`absolute left-0 top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${
+          on ? "translate-x-[18px]" : "translate-x-0.5"
         }`}
       />
     </button>
@@ -128,30 +86,84 @@ function Toggle({ on, onToggle }: { on: boolean; onToggle: () => void }) {
 // ── Page ───────────────────────────────────────────────────────────────────────
 
 export default function SettingsPage() {
-  const [integrations, setIntegrations] = useState<Integration[]>(defaultIntegrations);
+  const { currentUser } = useSession();
+  const currentUserId = currentUser?.userId;
+  const [outletId, setOutletId]       = useState("");
+  const [loading, setLoading]         = useState(true);
+  const [saving, setSaving]           = useState(false);
+  const [error, setError]             = useState("");
+  const [success, setSuccess]         = useState("");
 
   // Konfigurasi Toko form
-  const [storeName, setStoreName]   = useState("Toko Berkah Jaya");
+  const [storeName, setStoreName]   = useState("");
   const [address, setAddress]       = useState("");
-  const [phone, setPhone]           = useState("+62 211234 5678");
-  const [timezone, setTimezone]     = useState("WIB (UTC+7)");
-  const [currency, setCurrency]     = useState("IDR");
-  const [taxRate, setTaxRate]       = useState("10");
+  const [phone, setPhone]           = useState("");
+  const [taxRate, setTaxRate]       = useState("0");
 
   // Preferensi toggles
-  const [printAuto, setPrintAuto]   = useState(true);
+  const [printAuto, setPrintAuto]   = useState(false);
   const [stockAlert, setStockAlert] = useState(true);
   const [waReport, setWaReport]     = useState(false);
-  const [taxAuto, setTaxAuto]       = useState(true);
+  const [taxAuto, setTaxAuto]       = useState(false);
 
-  function toggleConnect(id: string) {
-    setIntegrations(prev =>
-      prev.map(i => i.id === id ? { ...i, connected: !i.connected } : i)
-    );
+  useEffect(() => {
+    let mounted = true;
+    outletService.list({ userId: currentUserId }).then((response) => {
+      if (!mounted) return;
+      const outlet = response.success && response.data ? response.data[0] : undefined;
+      if (outlet) {
+        setOutletId(outlet.outletId);
+        setStoreName(outlet.nama);
+        setAddress(outlet.alamat ?? "");
+        setPhone(outlet.telepon ?? "");
+        setTaxRate(String(outlet.taxRate));
+        setPrintAuto(outlet.printReceiptAuto);
+        setStockAlert(outlet.lowStockAlert);
+        setWaReport(outlet.dailyWhatsappReport);
+        setTaxAuto(outlet.autoTax);
+      } else if (!response.success) {
+        setError(response.message);
+      }
+      setLoading(false);
+    });
+    return () => { mounted = false; };
+  }, [currentUserId]);
+
+  async function saveSettings() {
+    if (!storeName.trim()) {
+      setError("Nama toko wajib diisi.");
+      return;
+    }
+    const parsedTaxRate = Number(taxRate);
+    if (!Number.isFinite(parsedTaxRate) || parsedTaxRate < 0 || parsedTaxRate > 100) {
+      setError("Tarif pajak harus berada di antara 0 dan 100.");
+      return;
+    }
+
+    setSaving(true);
+    setError("");
+    setSuccess("");
+    const input = {
+      nama: storeName.trim(),
+      alamat: address.trim() || undefined,
+      telepon: phone.trim() || undefined,
+      taxRate: parsedTaxRate,
+      printReceiptAuto: printAuto,
+      lowStockAlert: stockAlert,
+      dailyWhatsappReport: waReport,
+      autoTax: taxAuto,
+    };
+    const response = outletId
+      ? await outletService.update(outletId, input)
+      : await outletService.create({ ...input, userId: currentUserId });
+    if (response.success && response.data) {
+      setOutletId(response.data.outletId);
+      setSuccess("Pengaturan toko berhasil disimpan ke backend.");
+    } else {
+      setError(response.errors?.nama ?? response.message);
+    }
+    setSaving(false);
   }
-
-  const connected = integrations.filter(i => i.connected).length;
-  const total     = integrations.length;
 
   return (
     <DashboardLayout>
@@ -185,104 +197,6 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          {/* Integrasi */}
-          <div className="rounded-[20px] bg-white p-5 shadow-sm">
-            {/* Section header */}
-            <div className="mb-4 flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <p className="text-sm font-bold text-gray-800">Integrasi</p>
-                <span className="rounded-full bg-orange-100 px-2.5 py-0.5 text-[11px] font-bold text-orange-600">
-                  {connected}/{total} terhubung
-                </span>
-              </div>
-              <button className="flex items-center gap-1 text-xs font-semibold text-gray-400 hover:text-[#FF6B00] transition-colors">
-                <Circle size={10} className="text-orange-400" />
-                Jelajahi Semua
-              </button>
-            </div>
-
-            {/* Stats row */}
-            <div className="mb-4 grid grid-cols-4 gap-2.5">
-              {[
-                { label: "Total", value: String(total), color: "text-blue-600" },
-                { label: "Terhubung", value: String(connected), color: "text-green-600" },
-                { label: "Belum", value: String(total - connected), color: "text-orange-500" },
-                { label: "Future", value: "Siap", color: "text-purple-600" },
-              ].map(s => (
-                <div key={s.label} className="flex flex-col items-center rounded-xl bg-gray-50 py-3">
-                  <p className={`text-2xl font-extrabold ${s.color}`}>{s.value}</p>
-                  <p className="mt-0.5 text-[10px] font-semibold text-gray-400">{s.label}</p>
-                </div>
-              ))}
-            </div>
-
-            {/* Integration cards */}
-            <div className="grid grid-cols-2 gap-3">
-              {integrations.map(ig => (
-                <div key={ig.id} className="flex items-start gap-3 rounded-xl border border-gray-100 p-3.5">
-                  {/* Logo */}
-                  <div
-                    className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl text-[11px] font-extrabold"
-                    style={{ background: ig.color, color: ig.textColor }}
-                  >
-                    {ig.abbr}
-                  </div>
-
-                  {/* Info */}
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="text-sm font-bold text-gray-900">{ig.name}</span>
-                      {ig.badge && (
-                        <span className={`rounded-md px-1.5 py-0.5 text-[9px] font-bold ${ig.badgeColor}`}>
-                          {ig.badge}
-                        </span>
-                      )}
-                    </div>
-                    <p className="mt-0.5 text-[11px] text-gray-400">{ig.desc}</p>
-
-                    {/* Status + button */}
-                    <div className="mt-2.5 flex items-center justify-between">
-                      <div className="flex items-center gap-1.5">
-                        {ig.connected
-                          ? <CheckCircle2 size={12} className="text-green-500" />
-                          : <Circle size={12} className="text-gray-300" />
-                        }
-                        <span className={`text-[11px] font-semibold ${ig.connected ? "text-green-600" : "text-gray-400"}`}>
-                          {ig.connected ? "Aktif" : "Belum terhubung"}
-                        </span>
-                      </div>
-                      <button
-                        onClick={() => toggleConnect(ig.id)}
-                        className={`rounded-lg px-2.5 py-1 text-[11px] font-bold transition-colors ${
-                          ig.connected
-                            ? "border border-gray-200 text-gray-500 hover:bg-gray-50"
-                            : "bg-[#FF6B00] text-white hover:bg-[#E05E00]"
-                        }`}
-                      >
-                        {ig.connected ? "Konfigurasi" : "Hubungkan"}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Bottom CTA banner */}
-            <div className="mt-3 flex items-center justify-between rounded-xl bg-amber-50 border border-amber-100 px-4 py-3">
-              <div className="flex items-center gap-2.5">
-                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-200">
-                  <ExternalLink size={13} className="text-amber-700" />
-                </div>
-                <div>
-                  <p className="text-sm font-bold text-gray-900">Integrasi future-ready</p>
-                  <p className="text-[11px] text-gray-500">Konektor eksternal disiapkan untuk fase backend</p>
-                </div>
-              </div>
-              <button className="rounded-xl bg-[#FF6B00] px-3.5 py-2 text-xs font-bold text-white hover:bg-[#E05E00] transition-colors">
-                Lihat Rencana
-              </button>
-            </div>
-          </div>
         </div>
 
         {/* ── Konfigurasi Toko sidebar ── */}
@@ -299,16 +213,30 @@ export default function SettingsPage() {
                   <span className="text-[8px] font-black text-orange-600">✓</span>
                 </div>
               </div>
-              <p className="mt-2.5 text-sm font-bold text-gray-900">{storeName || "Nama Toko"}</p>
-              <p className="text-[11px] text-gray-400">POSmart MVP</p>
+              <p className="mt-2.5 text-sm font-bold text-gray-900">{loading ? "Memuat..." : storeName || "Outlet belum tersedia"}</p>
+              <p className="text-[11px] text-gray-400">Data outlet utama</p>
             </div>
+
+            {success && (
+              <div className="mb-3 flex items-start gap-2 rounded-xl bg-green-50 px-3 py-2 text-[11px] font-semibold text-green-700">
+                <CheckCircle2 size={13} className="mt-0.5 shrink-0" />
+                {success}
+              </div>
+            )}
+            {error && (
+              <div className="mb-3 flex items-start gap-2 rounded-xl bg-red-50 px-3 py-2 text-[11px] font-semibold text-red-600">
+                <AlertTriangle size={13} className="mt-0.5 shrink-0" />
+                {error}
+              </div>
+            )}
 
             <div className="border-t border-gray-100 pt-4 space-y-3">
               {/* Nama Toko */}
               <div>
                 <label className="mb-1 block text-xs font-semibold text-gray-600">Nama Toko</label>
                 <input value={storeName} onChange={e => setStoreName(e.target.value)}
-                  className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-orange-300" />
+                  disabled={loading || saving}
+                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-orange-300 disabled:bg-gray-50" />
               </div>
 
               {/* Alamat */}
@@ -316,42 +244,23 @@ export default function SettingsPage() {
                 <label className="mb-1 block text-xs font-semibold text-gray-600">Alamat</label>
                 <input value={address} onChange={e => setAddress(e.target.value)}
                   placeholder="Jl. Contoh No. 1"
-                  className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-300 outline-none focus:border-orange-300" />
+                  disabled={loading || saving}
+                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-300 outline-none focus:border-orange-300 disabled:bg-gray-50" />
               </div>
 
               {/* Telepon */}
               <div>
                 <label className="mb-1 block text-xs font-semibold text-gray-600">Telepon</label>
                 <input value={phone} onChange={e => setPhone(e.target.value)}
-                  className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-orange-300" />
-              </div>
-
-              {/* Zona Waktu + Mata Uang */}
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="mb-1 block text-xs font-semibold text-gray-600">Zona Waktu</label>
-                  <select value={timezone} onChange={e => setTimezone(e.target.value)}
-                    className="w-full rounded-xl border border-gray-200 px-2 py-2 text-xs text-gray-900 outline-none focus:border-orange-300 bg-white">
-                    <option>WIB (UTC+7)</option>
-                    <option>WITA (UTC+8)</option>
-                    <option>WIT (UTC+9)</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-semibold text-gray-600">Mata Uang</label>
-                  <select value={currency} onChange={e => setCurrency(e.target.value)}
-                    className="w-full rounded-xl border border-gray-200 px-2 py-2 text-xs text-gray-900 outline-none focus:border-orange-300 bg-white">
-                    <option>IDR</option>
-                    <option>USD</option>
-                    <option>SGD</option>
-                  </select>
-                </div>
+                  placeholder="Contoh: +62 812 3456 7890"
+                  disabled={loading || saving}
+                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-300 outline-none focus:border-orange-300 disabled:bg-gray-50" />
               </div>
 
               {/* Tarif Pajak */}
               <div>
                 <label className="mb-1 block text-xs font-semibold text-gray-600">Tarif Pajak PPN (%)</label>
-                <input type="number" value={taxRate} onChange={e => setTaxRate(e.target.value)}
+                <input type="number" min="0" max="100" step="0.01" value={taxRate} onChange={e => setTaxRate(e.target.value)}
                   className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-orange-300" />
               </div>
             </div>
@@ -378,9 +287,9 @@ export default function SettingsPage() {
             </div>
 
             {/* Save button */}
-            <button className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-[#FF6B00] py-2.5 text-sm font-bold text-white transition-colors hover:bg-[#E05E00]">
-              <Save size={14} />
-              Simpan Perubahan
+            <button type="button" onClick={saveSettings} disabled={loading || saving} className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-[#FF6B00] py-2.5 text-sm font-bold text-white transition-colors hover:bg-[#E05E00] disabled:cursor-not-allowed disabled:opacity-60">
+              {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+              {saving ? "Menyimpan..." : "Simpan Perubahan"}
             </button>
           </div>
         </div>

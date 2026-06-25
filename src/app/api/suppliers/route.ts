@@ -10,7 +10,7 @@ export const runtime = "nodejs";
 export async function GET(request: NextRequest) {
   try {
     const user = await requireAuth(request);
-    return ok("Daftar supplier berhasil diambil", await listSuppliers(user));
+    return ok("Daftar supplier berhasil diambil", await listSuppliers(user, request.nextUrl.searchParams));
   } catch (error) {
     return handleApiError(error);
   }

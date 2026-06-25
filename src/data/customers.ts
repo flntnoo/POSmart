@@ -1,5 +1,4 @@
 import type { Customer as DomainCustomer, Transaction } from "@/types/posmart";
-import { mockCustomers as sourceCustomers, mockTransactionDetails, mockTransactions } from "@/data/mockData";
 
 export type CustomerTier = "Gold" | "Silver" | "Bronze" | "Member";
 export type CustomerStatus = "Aktif" | "Tidak Aktif";
@@ -17,7 +16,6 @@ export type Customer = {
   visits: number;
   status: CustomerStatus;
   tier: CustomerTier;
-  recentItems: string[];
   recentTx: RecentTx[];
 };
 
@@ -35,19 +33,9 @@ function formatDate(value?: string) {
   return `${String(date.getDate()).padStart(2, "0")} ${months[date.getMonth()]} ${date.getFullYear()}`;
 }
 
-export function toCustomerView(customer: DomainCustomer, transactions: Transaction[] = mockTransactions): Customer {
+export function toCustomerView(customer: DomainCustomer, transactions: Transaction[]): Customer {
   const customerTransactions = transactions.filter((transaction) => transaction.customerId === customer.customerId);
   const totalSpent = customerTransactions.reduce((sum, transaction) => sum + transaction.total, 0);
-  const recentTx = customerTransactions.map((transaction) => ({
-    name: transaction.transactionId,
-    date: formatDate(transaction.tanggal),
-    amount: transaction.total,
-  }));
-  const recentItems = customerTransactions.flatMap((transaction) =>
-    mockTransactionDetails
-      .filter((detail) => detail.transactionId === transaction.transactionId)
-      .map((detail) => detail.productId)
-  );
 
   return {
     id: customer.customerId,
@@ -57,16 +45,17 @@ export function toCustomerView(customer: DomainCustomer, transactions: Transacti
     totalTransactions: customerTransactions.length,
     totalSpent,
     lastTransaction: formatDate(customerTransactions[0]?.tanggal),
-    joinDate: "01 Jun 2026",
-    visits: Math.max(customerTransactions.length, 1),
+    joinDate: "Belum tersedia",
+    visits: customerTransactions.length,
     status: customerTransactions.length > 0 ? "Aktif" : "Tidak Aktif",
     tier: calcTier(totalSpent, customerTransactions.length),
-    recentItems,
-    recentTx,
+    recentTx: customerTransactions.map((transaction) => ({
+      name: transaction.transactionId,
+      date: formatDate(transaction.tanggal),
+      amount: transaction.total,
+    })),
   };
 }
-
-export const mockCustomers: Customer[] = sourceCustomers.map((customer) => toCustomerView(customer, mockTransactions));
 
 export function formatRp(n: number) {
   return "Rp " + n.toLocaleString("id-ID");

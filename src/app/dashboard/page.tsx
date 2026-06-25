@@ -119,7 +119,7 @@ export default function DashboardPage() {
       </div>
 
       {loading ? (
-        <LoadingState title="Memuat dashboard..." description="Mengambil data workspace dari mock service." />
+        <LoadingState title="Memuat dashboard..." description="Mengambil data workspace dari backend." />
       ) : error ? (
         <ErrorState title="Dashboard belum bisa dimuat" description={error} />
       ) : (

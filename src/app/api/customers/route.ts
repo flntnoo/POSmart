@@ -9,7 +9,7 @@ export const runtime = "nodejs";
 export async function GET(request: NextRequest) {
   try {
     const user = await requireAuth(request);
-    return ok("Daftar pelanggan berhasil diambil", await listCustomers(user));
+    return ok("Daftar pelanggan berhasil diambil", await listCustomers(user, request.nextUrl.searchParams));
   } catch (error) {
     return handleApiError(error);
   }

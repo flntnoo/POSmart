@@ -17,6 +17,7 @@ type StatusFilter = "Semua" | TransactionStatus;
 type MethodFilter = "Semua" | PaymentMethod;
 
 const statusTabs: StatusFilter[] = ["Semua", "Sukses", "Pending", "Batal"];
+const monthLabels = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
 
 const statusStyles: Record<TransactionStatus, { pill: string; icon: React.ReactNode }> = {
   Sukses:  { pill: "bg-green-50 text-green-600",   icon: <CheckCircle2 size={11} /> },
@@ -38,6 +39,11 @@ function formatJumlah(total: number, status: TransactionStatus) {
   return { sign, color, amount };
 }
 
+function todayPrefix() {
+  const today = new Date();
+  return `${String(today.getDate()).padStart(2, "0")} ${monthLabels[today.getMonth()]} ${today.getFullYear()}`;
+}
+
 export default function TransactionsPage() {
   const { currentUser } = useSession();
   const [search, setSearch]       = useState("");
@@ -52,24 +58,32 @@ export default function TransactionsPage() {
       transactionService.list({ userId: currentUser?.userId }),
       productService.list({ userId: currentUser?.userId }),
       customerService.list({ userId: currentUser?.userId }),
-    ]).then(([transactionResponse, productResponse, customerResponse]) => {
+    ]).then(async ([transactionResponse, productResponse, customerResponse]) => {
       if (!mounted) return;
       const domainTransactions = transactionResponse.success && transactionResponse.data ? transactionResponse.data : [];
       const products = productResponse.success && productResponse.data ? productResponse.data : [];
       const customers = customerResponse.success && customerResponse.data ? customerResponse.data : [];
-      setTransactions(domainTransactions.map((transaction) => toTransactionView(transaction, { products, customers })));
+      const detailResponses = await Promise.all(domainTransactions.map((transaction) => transactionService.detail(transaction.transactionId)));
+      if (!mounted) return;
+      const details = detailResponses.flatMap((response) => response.success && response.data ? response.data.details : []);
+      setTransactions(domainTransactions.map((transaction) => toTransactionView(transaction, {
+        details,
+        products,
+        customers,
+        users: currentUser ? [currentUser] : [],
+      })));
     });
     return () => {
       mounted = false;
     };
-  }, [currentUser?.userId]);
+  }, [currentUser]);
 
   const stats = useMemo(() => {
     const sukses   = transactions.filter(t => t.status === "Sukses");
     const batal    = transactions.filter(t => t.status === "Batal").length;
     const pending  = transactions.filter(t => t.status === "Pending").length;
     const revenue  = sukses.reduce((s, t) => s + t.total, 0);
-    const today    = transactions.filter(t => t.date.startsWith("13 Jun 2026"));
+    const today    = transactions.filter(t => t.date.startsWith(todayPrefix()));
     const todayOk  = today.filter(t => t.status === "Sukses").length;
     const methods  = new Set(transactions.map(t => t.method)).size;
     return { total: transactions.length, sukses: sukses.length, batal, pending, revenue, todayCount: today.length, todayOk, methods };
@@ -116,16 +130,16 @@ export default function TransactionsPage() {
         >
           <div className="pointer-events-none absolute -right-7 -top-7 h-36 w-36 rounded-full border-2 border-white/20" />
           <div className="pointer-events-none absolute -right-1 -top-1 h-20 w-20 rounded-full border-2 border-white/20" />
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-white/80">Total Transaksi Bulan Ini</p>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-white/80">Total Transaksi</p>
           <p className="mt-1 text-5xl font-extrabold text-white">{stats.total}</p>
           <p className="mt-3 text-[11px] font-semibold text-white/70">
-            +2.5% <span className="text-white/50">bulan ini</span>
+            <span className="text-white/80">Data dari backend</span>
           </p>
         </div>
 
         {/* Card 2 – Pendapatan */}
         <div className="rounded-[20px] bg-white p-5 shadow-sm">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Pendapatan Bulan Ini</p>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Pendapatan Sukses</p>
           <p className="mt-1 text-2xl font-extrabold text-gray-900 leading-tight">
             {stats.revenue >= 1_000_000
               ? "Rp" + (stats.revenue / 1_000_000).toFixed(0) + " Jt"
@@ -137,8 +151,8 @@ export default function TransactionsPage() {
               <span className="text-xs font-semibold text-green-600">{stats.sukses} transaksi</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Tren</span>
-              <span className="text-xs font-semibold text-green-600">+20.5% bulan lalu</span>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Sumber</span>
+              <span className="text-xs font-semibold text-gray-600">Backend</span>
             </div>
           </div>
         </div>
@@ -268,7 +282,9 @@ export default function TransactionsPage() {
                     </td>
                     {/* Produk */}
                     <td className="px-4 py-3.5">
-                      <span className="text-xs text-gray-600 line-clamp-1 max-w-[140px]">{tx.items[0]?.name}</span>
+                      <span className="text-xs text-gray-600 line-clamp-1 max-w-[140px]">
+                        {tx.items[0]?.name ?? "Detail item tidak tersedia"}
+                      </span>
                       {tx.itemCount > 1 && (
                         <span className="text-[10px] text-gray-400"> +{tx.itemCount - 1} lainnya</span>
                       )}

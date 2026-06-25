@@ -84,12 +84,20 @@ model User {
 }
 
 model Outlet {
-  outletId  Int      @id @default(autoincrement()) @map("outlet_id")
-  userId    Int      @map("user_id")
-  nama      String   @db.VarChar(120)
-  alamat    String?
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  outletId            Int      @id @default(autoincrement()) @map("outlet_id")
+  userId              Int      @map("user_id")
+  nama                String   @db.VarChar(120)
+  alamat              String?
+  telepon             String?  @db.VarChar(30)
+  timezone            String   @default("Asia/Jakarta") @db.VarChar(50)
+  currency            String   @default("IDR") @db.VarChar(3)
+  taxRate             Decimal  @default(0) @map("tax_rate") @db.Decimal(5, 2)
+  printReceiptAuto    Boolean  @default(false) @map("print_receipt_auto")
+  lowStockAlert       Boolean  @default(true) @map("low_stock_alert")
+  dailyWhatsappReport Boolean  @default(false) @map("daily_whatsapp_report")
+  autoTax             Boolean  @default(false) @map("auto_tax")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
 
   user         User          @relation(fields: [userId], references: [userId], onDelete: Restrict, onUpdate: Cascade)
   products     Product[]

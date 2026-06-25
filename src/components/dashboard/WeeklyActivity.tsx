@@ -1,5 +1,6 @@
 "use client";
 
+// Legacy demo-only component. The active /dashboard page does not import this module.
 import {
   BarChart,
   Bar,

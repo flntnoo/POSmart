@@ -192,7 +192,7 @@ export default function AnalyticsPage() {
         </div>
       </form>
 
-      {loading && <LoadingState title="Memuat analytics..." description="Mengambil ringkasan performa dari mock service." />}
+      {loading && <LoadingState title="Memuat analytics..." description="Mengambil ringkasan performa dari backend." />}
 
       {!loading && errorMessage && (
         <ErrorState title="Analytics belum bisa dimuat" description={errorMessage} />

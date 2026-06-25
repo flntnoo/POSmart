@@ -32,6 +32,7 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
 
 # vercel
 .vercel
@@ -48,4 +49,14 @@ FSD_POSmart.md
 #Implementation
 BACKEND_INTEGRATION_NOTES.md
 AGENTS.md
+
+# Phase E Deployment Files (Local Only)
+PHASE_E_DEPLOYMENT_READINESS.md
+PHASE_E_SUMMARY.md
+DEPLOYMENT_QUICK_REFERENCE.md
+DEPLOYMENT_FILES_INDEX.md
+ecosystem.config.js
+nginx.conf.template
+.env.production.example
+scripts/deploy-vps.sh
 CLAUDE.md

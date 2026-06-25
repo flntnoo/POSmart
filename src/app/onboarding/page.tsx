@@ -5,10 +5,8 @@ import { useRouter } from "next/navigation";
 import DashboardLayout from "@/layouts/DashboardLayout";
 import { ErrorState, LoadingState } from "@/components/ui/AppState";
 import {
-  auditLogService,
   categoryService,
   inventoryService,
-  notificationService,
   outletService,
   productService,
   supplierService,
@@ -42,7 +40,7 @@ type InventoryForm = { productId: string; outletId: string; stok: string };
 export default function OnboardingPage() {
   const router = useRouter();
   const { currentUser } = useSession();
-  const currentUserId = currentUser?.userId ?? "user-owner-001";
+  const currentUserId = currentUser?.userId;
   const [stepIndex, setStepIndex] = useState(0);
   const [outlets, setOutlets] = useState<Outlet[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -74,11 +72,29 @@ export default function OnboardingPage() {
 
       if (!mounted) return;
 
-      if (outletResponse.success && outletResponse.data) setOutlets(outletResponse.data);
-      if (categoryResponse.success && categoryResponse.data) setCategories(categoryResponse.data);
-      if (supplierResponse.success && supplierResponse.data) setSuppliers(supplierResponse.data);
-      if (productResponse.success && productResponse.data) setProducts(productResponse.data);
-      if (inventoryResponse.success && inventoryResponse.data) setInventory(inventoryResponse.data);
+      const nextOutlets = outletResponse.success && outletResponse.data ? outletResponse.data : [];
+      const nextCategories = categoryResponse.success && categoryResponse.data ? categoryResponse.data : [];
+      const nextSuppliers = supplierResponse.success && supplierResponse.data ? supplierResponse.data : [];
+      const nextProducts = productResponse.success && productResponse.data ? productResponse.data : [];
+      const nextInventory = inventoryResponse.success && inventoryResponse.data ? inventoryResponse.data : [];
+
+      setOutlets(nextOutlets);
+      setCategories(nextCategories);
+      setSuppliers(nextSuppliers);
+      setProducts(nextProducts);
+      setInventory(nextInventory);
+      if (nextOutlets[0]) {
+        setOutletForm((current) => current.outletId ? current : { ...current, outletId: nextOutlets[0].outletId });
+        setProductForm((current) => current.outletId ? current : { ...current, outletId: nextOutlets[0].outletId });
+        setInventoryForm((current) => current.outletId ? current : { ...current, outletId: nextOutlets[0].outletId });
+      }
+      if (nextCategories[0]) {
+        setCategoryForm((current) => current.categoryId ? current : { ...current, categoryId: nextCategories[0].categoryId });
+        setProductForm((current) => current.categoryId ? current : { ...current, categoryId: nextCategories[0].categoryId });
+      }
+      if (nextProducts[0]) {
+        setInventoryForm((current) => current.productId ? current : { ...current, productId: nextProducts[0].productId });
+      }
       setLoading(false);
     }
 
@@ -87,31 +103,6 @@ export default function OnboardingPage() {
       mounted = false;
     };
   }, [currentUserId]);
-
-  useEffect(() => {
-    if (!outletForm.outletId && outlets[0]) {
-      setOutletForm((current) => ({ ...current, outletId: outlets[0].outletId }));
-    }
-    if (!productForm.outletId && outlets[0]) {
-      setProductForm((current) => ({ ...current, outletId: outlets[0].outletId }));
-      setInventoryForm((current) => ({ ...current, outletId: outlets[0].outletId }));
-    }
-  }, [outletForm.outletId, outlets, productForm.outletId]);
-
-  useEffect(() => {
-    if (!categoryForm.categoryId && categories[0]) {
-      setCategoryForm((current) => ({ ...current, categoryId: categories[0].categoryId }));
-    }
-    if (!productForm.categoryId && categories[0]) {
-      setProductForm((current) => ({ ...current, categoryId: categories[0].categoryId }));
-    }
-  }, [categories, categoryForm.categoryId, productForm.categoryId]);
-
-  useEffect(() => {
-    if (!inventoryForm.productId && products[0]) {
-      setInventoryForm((current) => ({ ...current, productId: products[0].productId }));
-    }
-  }, [inventoryForm.productId, products]);
 
   const currentStep = steps[stepIndex];
   const progress = Math.round(((stepIndex + 1) / steps.length) * 100);
@@ -151,16 +142,11 @@ export default function OnboardingPage() {
       return false;
     }
 
-    await auditLogService.create({
-      userId: currentUserId,
-      aksi: `Membuat outlet ${response.data.nama}`,
-      module: "outlets",
-    });
-
-    setOutlets((current) => current.some((item) => item.outletId === response.data!.outletId) ? [...current] : [response.data!, ...current]);
-    setOutletForm((current) => ({ ...current, outletId: response.data!.outletId }));
-    setProductForm((current) => ({ ...current, outletId: response.data!.outletId }));
-    setInventoryForm((current) => ({ ...current, outletId: response.data!.outletId }));
+    const outlet = response.data;
+    setOutlets((current) => current.some((item) => item.outletId === outlet.outletId) ? [...current] : [outlet, ...current]);
+    setOutletForm((current) => ({ ...current, outletId: outlet.outletId }));
+    setProductForm((current) => ({ ...current, outletId: outlet.outletId }));
+    setInventoryForm((current) => ({ ...current, outletId: outlet.outletId }));
     setSuccess("Outlet berhasil disiapkan.");
     return true;
   }
@@ -187,15 +173,10 @@ export default function OnboardingPage() {
       return false;
     }
 
-    await auditLogService.create({
-      userId: currentUserId,
-      aksi: `Membuat kategori ${response.data.nama}`,
-      module: "categories",
-    });
-
-    setCategories((current) => current.some((item) => item.categoryId === response.data!.categoryId) ? [...current] : [response.data!, ...current]);
-    setCategoryForm((current) => ({ ...current, categoryId: response.data!.categoryId }));
-    setProductForm((current) => ({ ...current, categoryId: response.data!.categoryId }));
+    const category = response.data;
+    setCategories((current) => current.some((item) => item.categoryId === category.categoryId) ? [...current] : [category, ...current]);
+    setCategoryForm((current) => ({ ...current, categoryId: category.categoryId }));
+    setProductForm((current) => ({ ...current, categoryId: category.categoryId }));
     setSuccess("Kategori berhasil disiapkan.");
     return true;
   }
@@ -222,15 +203,10 @@ export default function OnboardingPage() {
       return false;
     }
 
-    await auditLogService.create({
-      userId: currentUserId,
-      aksi: `Membuat supplier ${response.data.nama}`,
-      module: "suppliers",
-    });
-
-    setSuppliers((current) => current.some((item) => item.supplierId === response.data!.supplierId) ? [...current] : [response.data!, ...current]);
-    setSupplierForm((current) => ({ ...current, supplierId: response.data!.supplierId }));
-    setProductForm((current) => ({ ...current, supplierId: response.data!.supplierId }));
+    const supplier = response.data;
+    setSuppliers((current) => current.some((item) => item.supplierId === supplier.supplierId) ? [...current] : [supplier, ...current]);
+    setSupplierForm((current) => ({ ...current, supplierId: supplier.supplierId }));
+    setProductForm((current) => ({ ...current, supplierId: supplier.supplierId }));
     setSuccess("Supplier berhasil disiapkan.");
     return true;
   }
@@ -264,14 +240,9 @@ export default function OnboardingPage() {
       return false;
     }
 
-    await auditLogService.create({
-      userId: currentUserId,
-      aksi: `Membuat produk ${response.data.nama}`,
-      module: "products",
-    });
-
-    setProducts((current) => current.some((item) => item.productId === response.data!.productId) ? [...current] : [response.data!, ...current]);
-    setInventoryForm((current) => ({ ...current, productId: response.data!.productId, outletId: response.data!.outletId ?? current.outletId }));
+    const product = response.data;
+    setProducts((current) => current.some((item) => item.productId === product.productId) ? [...current] : [product, ...current]);
+    setInventoryForm((current) => ({ ...current, productId: product.productId, outletId: product.outletId ?? current.outletId }));
     setSuccess("Produk berhasil disiapkan.");
     return true;
   }
@@ -300,28 +271,10 @@ export default function OnboardingPage() {
       return false;
     }
 
-    await auditLogService.create({
-      userId: currentUserId,
-      aksi: `Mengatur stok awal produk ${inventoryForm.productId} menjadi ${stock}`,
-      module: "inventory",
-    });
-
-    const product = products.find((item) => item.productId === response.data.productId);
-    const outlet = outlets.find((item) => item.outletId === response.data.outletId);
-    if (response.data.stok <= response.data.minStock) {
-      await notificationService.createLowStock({
-        userId: currentUserId,
-        productId: response.data.productId,
-        outletId: response.data.outletId,
-        productName: product?.nama ?? response.data.productId,
-        outletName: outlet?.nama ?? "outlet aktif",
-        stock: response.data.stok,
-      });
-    }
-
+    const inventoryRow = response.data;
     setInventory((current) => existing
-      ? current.map((item) => item.inventoryId === response.data!.inventoryId ? response.data! : item)
-      : current.some((item) => item.inventoryId === response.data!.inventoryId) ? [...current] : [response.data!, ...current]);
+      ? current.map((item) => item.inventoryId === inventoryRow.inventoryId ? inventoryRow : item)
+      : current.some((item) => item.inventoryId === inventoryRow.inventoryId) ? [...current] : [inventoryRow, ...current]);
     setSuccess("Stok awal berhasil disiapkan.");
     return true;
   }
