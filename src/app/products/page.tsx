@@ -12,7 +12,7 @@ import {
 import { categoryService, inventoryService, outletService, productService, supplierService } from "@/services";
 import { useSession } from "@/contexts/SessionContext";
 import type { Category, Inventory, Outlet, Product, Supplier } from "@/types/posmart";
-import { AlertTriangle, CheckCircle2, ChevronDown, Loader2, Package, Pencil, Plus, Search, Trash2, X } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronDown, ImagePlus, Loader2, Package, Pencil, Plus, Search, Trash2, X } from "lucide-react";
 
 type CategoryFilter = "Semua" | "Minuman" | "Makanan" | "Snack" | "Retail";
 type StatusFilter = "Semua" | "Aktif" | "Menipis" | "Habis";
@@ -57,16 +57,41 @@ type FormData = {
   price: string;
   stock: string;
   description: string;
+  photoDataUrl: string;
 };
 
 const emptyForm: FormData = {
-  name: "", sku: "", category: "", price: "", stock: "", description: "",
+  name: "", sku: "", category: "", price: "", stock: "", description: "", photoDataUrl: "",
 };
 
 type FormErrors = Partial<Record<keyof FormData | "form" | "outlet", string>>;
 
 function formatPrice(p: number) {
   return "Rp " + p.toLocaleString("id-ID");
+}
+
+const productPhotoStorageKey = "posmart.productPhotos.v1";
+
+function loadStoredProductPhotos(): Record<string, string> {
+  if (typeof window === "undefined") return {};
+  try {
+    const stored = window.localStorage.getItem(productPhotoStorageKey);
+    if (!stored) return {};
+    const parsed = JSON.parse(stored) as unknown;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? parsed as Record<string, string>
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+function storeProductPhotos(photos: Record<string, string>) {
+  try {
+    window.localStorage.setItem(productPhotoStorageKey, JSON.stringify(photos));
+  } catch {
+    // Browser storage can be full or blocked; the preview still works for this session.
+  }
 }
 
 export default function ProductsPage() {
@@ -84,9 +109,14 @@ export default function ProductsPage() {
   const [categories, setCategories]         = useState<Category[]>([]);
   const [outlets, setOutlets]               = useState<Outlet[]>([]);
   const [suppliers, setSuppliers]           = useState<Supplier[]>([]);
+  const [productPhotos, setProductPhotos]   = useState<Record<string, string>>({});
   const [formErrors, setFormErrors]         = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting]     = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
+
+  useEffect(() => {
+    queueMicrotask(() => setProductPhotos(loadStoredProductPhotos()));
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -157,8 +187,49 @@ export default function ProductsPage() {
       price: String(product.price),
       stock: product.stock === null ? "" : String(product.stock),
       description: "",
+      photoDataUrl: productPhotos[product.id] ?? "",
     });
     setFormErrors({});
+  }
+
+  function saveProductPhoto(productId: string, photoDataUrl: string) {
+    setProductPhotos((current) => {
+      const next = { ...current };
+      if (photoDataUrl) {
+        next[productId] = photoDataUrl;
+      } else {
+        delete next[productId];
+      }
+      storeProductPhotos(next);
+      return next;
+    });
+  }
+
+  function handlePhotoChange(file: File | undefined) {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setFormErrors((current) => ({ ...current, form: "File foto harus berupa gambar." }));
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setFormErrors((current) => ({ ...current, form: "Ukuran foto maksimal 2 MB." }));
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = typeof reader.result === "string" ? reader.result : "";
+      setForm((current) => ({ ...current, photoDataUrl: result }));
+      setFormErrors((current) => {
+        const next = { ...current };
+        delete next.form;
+        return next;
+      });
+    };
+    reader.onerror = () => {
+      setFormErrors((current) => ({ ...current, form: "Foto gagal dibaca. Coba pilih file lain." }));
+    };
+    reader.readAsDataURL(file);
   }
 
   function handleDelete(id: string) {
@@ -229,6 +300,7 @@ export default function ProductsPage() {
         ? inventory.map((item) => item.inventoryId === inventoryResponse.data!.inventoryId ? inventoryResponse.data! : item)
         : inventory;
       setInventory(nextInventory);
+      saveProductPhoto(editingId, form.photoDataUrl);
       setDomainProducts((current) => current.map((item) => item.productId === editingId ? response.data! : item));
       setProducts((current) => current.map((item) => item.id === editingId ? toProductView(response.data!, {
         inventory: nextInventory,
@@ -262,6 +334,7 @@ export default function ProductsPage() {
       const nextInventory = inventoryResponse.success && inventoryResponse.data ? [inventoryResponse.data, ...inventory] : inventory;
       const nextDomainProducts = [response.data, ...domainProducts];
       setInventory(nextInventory);
+      saveProductPhoto(response.data.productId, form.photoDataUrl);
       setDomainProducts(nextDomainProducts);
       setProducts(nextDomainProducts.map((product) => toProductView(product, {
         inventory: nextInventory,
@@ -466,12 +539,21 @@ export default function ProductsPage() {
                   >
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-3">
-                        <div
-                          className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl text-xs font-bold text-gray-600"
-                          style={{ background: `linear-gradient(135deg, ${gFrom}, ${gTo})` }}
-                        >
-                          {product.sku === "-" ? "PR" : product.sku.slice(0, 2)}
-                        </div>
+                        {productPhotos[product.id] ? (
+                          <div
+                            role="img"
+                            aria-label={product.name}
+                            className="h-10 w-10 flex-shrink-0 rounded-xl bg-cover bg-center"
+                            style={{ backgroundImage: `url(${productPhotos[product.id]})` }}
+                          />
+                        ) : (
+                          <div
+                            className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl text-xs font-bold text-gray-600"
+                            style={{ background: `linear-gradient(135deg, ${gFrom}, ${gTo})` }}
+                          >
+                            {product.sku === "-" ? "PR" : product.sku.slice(0, 2)}
+                          </div>
+                        )}
                         <div className="min-w-0">
                           <p className="truncate font-semibold leading-tight text-gray-800">{product.name}</p>
                           <p className="mt-0.5 text-xs text-gray-400">{product.sku}</p>
@@ -579,14 +661,38 @@ export default function ProductsPage() {
               )}
               {/* Upload circle */}
               <div className="flex flex-col items-center pb-1">
-                <button type="button" className="relative">
-                  <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[#FF6B00]">
-                    <Package size={30} className="text-white" />
-                  </div>
+                <label className="relative cursor-pointer">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="sr-only"
+                    onChange={(event) => handlePhotoChange(event.target.files?.[0])}
+                  />
+                  {form.photoDataUrl ? (
+                    <div
+                      role="img"
+                      aria-label="Preview foto produk"
+                      className="h-20 w-20 rounded-full bg-cover bg-center ring-4 ring-orange-50"
+                      style={{ backgroundImage: `url(${form.photoDataUrl})` }}
+                    />
+                  ) : (
+                    <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[#FF6B00]">
+                      <Package size={30} className="text-white" />
+                    </div>
+                  )}
                   <div className="absolute bottom-0 right-0 flex h-6 w-6 items-center justify-center rounded-full bg-green-500 shadow-md">
-                    <Plus size={12} className="text-white" strokeWidth={3} />
+                    <ImagePlus size={12} className="text-white" strokeWidth={3} />
                   </div>
-                </button>
+                </label>
+                {form.photoDataUrl && (
+                  <button
+                    type="button"
+                    onClick={() => setForm((current) => ({ ...current, photoDataUrl: "" }))}
+                    className="mt-2 text-[11px] font-semibold text-gray-400 hover:text-red-500"
+                  >
+                    Hapus foto
+                  </button>
+                )}
                 <p className="mt-2 text-xs text-gray-400">Klik untuk upload foto produk</p>
               </div>
 
