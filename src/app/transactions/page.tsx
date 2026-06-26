@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
+import Link from "next/link";
 import DashboardLayout from "@/layouts/DashboardLayout";
 import { useSession } from "@/contexts/SessionContext";
 import {
@@ -42,6 +43,11 @@ function formatJumlah(total: number, status: TransactionStatus) {
 function todayPrefix() {
   const today = new Date();
   return `${String(today.getDate()).padStart(2, "0")} ${monthLabels[today.getMonth()]} ${today.getFullYear()}`;
+}
+
+function csvCell(value: string | number) {
+  const text = String(value).replace(/\r?\n/g, " ");
+  return /[",;]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
 export default function TransactionsPage() {
@@ -101,6 +107,46 @@ export default function TransactionsPage() {
     });
   }, [transactions, statusFilter, methodFilter, search]);
 
+  function exportCsv() {
+    const headers = [
+      "ID Transaksi",
+      "Tanggal",
+      "Pelanggan",
+      "Kasir",
+      "Produk",
+      "Jumlah Item",
+      "Subtotal",
+      "Pajak",
+      "Total",
+      "Metode",
+      "Status",
+    ];
+    const rows = filtered.map((tx) => [
+      tx.id,
+      tx.date,
+      tx.customer,
+      tx.cashier,
+      tx.items.map((item) => `${item.name} x${item.qty}`).join("; "),
+      tx.itemCount,
+      tx.subtotal,
+      tx.tax,
+      tx.total,
+      tx.method,
+      tx.status,
+    ]);
+    const csv = [headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\r\n");
+    const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const date = new Date().toISOString().slice(0, 10);
+    link.href = url;
+    link.download = `posmart-transaksi-${date}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <DashboardLayout>
       {/* Header */}
@@ -110,14 +156,18 @@ export default function TransactionsPage() {
           <p className="mt-0.5 text-sm text-gray-500">Riwayat dan detail semua transaksi penjualan</p>
         </div>
         <div className="flex flex-wrap items-center gap-2.5">
-          <button className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-600 shadow-sm transition-colors hover:bg-gray-50">
+          <button
+            type="button"
+            onClick={exportCsv}
+            className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-600 shadow-sm transition-colors hover:bg-gray-50"
+          >
             <FileDown size={14} />
             Export CSV
           </button>
-          <button className="flex items-center gap-2 rounded-xl bg-[#FF6B00] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[#E05E00]">
+          <Link href="/pos" className="flex items-center gap-2 rounded-xl bg-[#FF6B00] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[#E05E00]">
             <Plus size={15} strokeWidth={2.5} />
             Transaksi Baru
-          </button>
+          </Link>
         </div>
       </div>
 
