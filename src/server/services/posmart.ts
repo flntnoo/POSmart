@@ -17,7 +17,7 @@ import {
   transactionDto,
   userDto,
 } from "@/server/dto/posmart";
-import type { AnalyticsSummary, NotificationStatus, NotificationType, PaymentStatus, SubscriptionPackage } from "@/types/posmart";
+import type { AnalyticsSummary, NotificationStatus, NotificationType, PaymentStatus, SubscriptionPackage, UserRole } from "@/types/posmart";
 
 type PrismaTx = Omit<typeof prisma, "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends">;
 
@@ -229,6 +229,44 @@ export async function updateProfile(user: SessionUser, input: { nama?: string; e
   }
   const updated = await prisma.user.update({ where: { userId: user.userId }, data: input });
   return userDto(updated);
+}
+
+export async function listTeamMembers(user: SessionUser) {
+  const rows = await prisma.user.findMany({
+    where: {
+      ownerUserId: user.userId,
+      NOT: { userId: user.userId },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+  return rows.map(userDto);
+}
+
+export async function inviteTeamMember(user: SessionUser, input: { nama: string; email: string; password: string; role: UserRole }) {
+  if (user.role !== "owner") {
+    throw new ApiError(403, "Hanya owner yang dapat mengundang karyawan");
+  }
+
+  if (input.role === "owner") {
+    throw new ApiError(400, "Role tidak valid", { role: "Karyawan tidak boleh dibuat sebagai owner" });
+  }
+
+  const existing = await prisma.user.findUnique({ where: { email: input.email } });
+  if (existing) throw new ApiError(409, "Email sudah digunakan", { email: "Email sudah terdaftar" });
+
+  const passwordHash = await bcrypt.hash(input.password, 12);
+  const row = await prisma.user.create({
+    data: {
+      nama: input.nama,
+      email: input.email,
+      passwordHash,
+      role: input.role,
+      ownerUserId: user.userId,
+    },
+  });
+
+  await createAudit(prisma, user.userId, "team", `Mengundang karyawan ${row.email}`, "user", String(row.userId));
+  return userDto(row);
 }
 
 export async function listOutlets(user: SessionUser, filters = new URLSearchParams()) {

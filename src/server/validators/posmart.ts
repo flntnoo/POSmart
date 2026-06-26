@@ -21,6 +21,15 @@ export const profileUpdateSchema = z.object({
   email: z.email().trim().toLowerCase().optional(),
 });
 
+export const teamInviteSchema = z.object({
+  nama: z.string().trim().min(1, "Nama lengkap wajib diisi"),
+  email: z.email("Email tidak valid").trim().toLowerCase(),
+  password: z.string().min(6, "Password minimal 6 karakter"),
+  role: z.enum(["admin", "kasir"], {
+    error: "Role karyawan harus admin atau kasir",
+  }),
+});
+
 export const outletCreateSchema = z.object({
   nama: z.string().trim().min(1, "Nama outlet wajib diisi"),
   alamat: z.string().trim().optional(),

@@ -10,4 +10,5 @@ export { paymentService } from "./paymentService";
 export { productService } from "./productService";
 export { supplierService } from "./supplierService";
 export { subscriptionService } from "./subscriptionService";
+export { teamService } from "./teamService";
 export { transactionService } from "./transactionService";
